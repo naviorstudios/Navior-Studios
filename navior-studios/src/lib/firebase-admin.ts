@@ -1,8 +1,11 @@
 import { initializeApp as initializeAdminApp, getApps as getAdminApps, cert } from "firebase-admin/app";
 import { getFirestore as getAdminFirestore, Firestore } from "firebase-admin/firestore";
 
+import { getAuth as getAdminAuth, Auth } from "firebase-admin/auth";
+
 let adminApp;
 let adminDb: Firestore | undefined;
+let adminAuth: Auth;
 
 if (typeof window === 'undefined') { // Only initialize on server
   try {
@@ -16,9 +19,10 @@ if (typeof window === 'undefined') { // Only initialize on server
           }),
         });
     adminDb = getAdminFirestore(adminApp);
+    adminAuth = getAdminAuth(adminApp);
   } catch (error) {
     console.error('Firebase Admin initialization error:', error);
   }
 }
 
-export { adminDb };
+export { adminDb, adminAuth };

@@ -5,9 +5,9 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { Product, useCartStore } from "@/store/useCartStore";
-import { Shield, Zap, Package, ArrowLeft, Plus, Minus, Share2 } from "lucide-react";
-import { motion } from "framer-motion";
-import { gsap } from "gsap";
+import { Shield, Zap, Package, ArrowLeft, Plus, Minus, Share2, Sparkles, Cpu, Globe } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useToast } from "@/context/ToastContext";
 
 interface ProductContentProps {
   initialProduct: Product;
@@ -19,191 +19,256 @@ const ProductContent: React.FC<ProductContentProps> = ({ initialProduct }) => {
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
   const { addToCart } = useCartStore();
-  const imageRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (imageRef.current) {
-        gsap.from(imageRef.current, {
-            scale: 0.9,
-            opacity: 0,
-            duration: 1,
-            ease: "power4.out"
-        });
-    }
-  }, [selectedImage]);
+  const { success: showSuccess } = useToast();
 
   const handleAddToCart = () => {
     for (let i = 0; i < quantity; i++) {
         addToCart(product);
     }
+    showSuccess("Unit Sync'd", `${quantity} x ${product.name} added to your deployment bag.`);
   };
 
   return (
-    <main className="min-h-screen bg-black text-white selection-white">
+    <main className="min-h-screen bg-[#050505] text-white selection:bg-white selection:text-black">
       <Navbar />
 
-      <div className="pt-32 pb-20 container mx-auto px-6">
-        <button 
+      <div className="pt-32 pb-40 px-6 container mx-auto max-w-[1400px]">
+        {/* Back Navigation */}
+        <motion.button 
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
             onClick={() => router.back()}
-            className="flex items-center space-x-2 text-white/40 hover:text-white transition-colors mb-12 group"
+            className="flex items-center space-x-3 text-white/20 hover:text-white transition-all mb-16 group"
         >
-            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-            <span className="text-[10px] uppercase tracking-[0.2em] font-black">Back to Collection</span>
-        </button>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
-          <div className="space-y-6">
-            <div 
-                ref={imageRef}
-                className="aspect-square bg-[#111111] rounded-[40px] border border-white/5 overflow-hidden relative flex items-center justify-center group"
-            >
-                {product.images[selectedImage] ? (
-                    <Image
-                        src={product.images[selectedImage]}
-                        alt={product.name}
-                        fill
-                        className="object-contain p-12 transition-transform duration-700 group-hover:scale-105"
-                    />
-                ) : (
-                    <div className="text-white/5 font-black text-9xl tracking-tighter uppercase select-none">
-                        {product.name.split(' ')[0]}
-                    </div>
-                )}
+            <div className="w-8 h-8 rounded-full border border-white/5 flex items-center justify-center group-hover:border-white/20">
+                <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
             </div>
+            <span className="text-[10px] uppercase tracking-[0.4em] font-black italic">Return to Station</span>
+        </motion.button>
 
-            {product.images.length > 1 && (
-                <div className="flex space-x-4 overflow-x-auto pb-2 scrollbar-hide">
-                    {product.images.map((img, i) => (
-                        <button
-                            key={i}
-                            onClick={() => setSelectedImage(i)}
-                            className={`w-24 h-24 rounded-2xl border transition-all overflow-hidden shrink-0 flex items-center justify-center bg-[#111111] ${
-                                selectedImage === i ? "border-white" : "border-white/5 hover:border-white/20"
-                            }`}
-                        >
-                            <Image src={img} alt="" width={60} height={60} className="object-contain" />
-                        </button>
-                    ))}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-20 lg:gap-32">
+          
+          {/* Left: Cinematic Visuals */}
+          <div className="lg:col-span-7 space-y-10">
+            <motion.div 
+               layoutId={`image-${product.id}`}
+               className="aspect-[4/5] bg-white/[0.02] rounded-[60px] border border-white/5 overflow-hidden relative flex items-center justify-center group"
+            >
+                {/* Background Pattern */}
+                <div className="absolute inset-0 opacity-10 pointer-events-none">
+                   <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-full bg-gradient-to-b from-white via-transparent to-transparent" />
+                   <div className="absolute top-1/2 left-0 -translate-y-1/2 w-full h-px bg-gradient-to-r from-transparent via-white to-transparent" />
                 </div>
-            )}
+
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={selectedImage}
+                    initial={{ opacity: 0, scale: 0.9, rotateY: 20 }}
+                    animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+                    exit={{ opacity: 0, scale: 1.1, rotateY: -20 }}
+                    transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                    className="relative w-full h-full flex items-center justify-center p-12 md:p-24"
+                  >
+                    {product.images?.[selectedImage] ? (
+                        <Image
+                            src={product.images[selectedImage]}
+                            alt={product.name}
+                            fill
+                            priority
+                            className="object-contain drop-shadow-[0_40px_80px_rgba(255,255,255,0.05)] transition-transform duration-700 group-hover:scale-110"
+                        />
+                    ) : (
+                        <div className="text-white/[0.03] font-black text-[20rem] tracking-tighter uppercase select-none italic -rotate-12">
+                            {product.name.split(' ')[0]}
+                        </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+
+                {/* Perspective Badge */}
+                <div className="absolute bottom-12 right-12 flex items-center space-x-4">
+                   <div className="px-4 py-2 bg-black/40 backdrop-blur-xl border border-white/5 rounded-full text-[9px] font-black uppercase tracking-[0.3em] text-white/40 italic">
+                      Series 01 // V.1.0
+                   </div>
+                </div>
+            </motion.div>
+
+            {/* Thumbnail Switcher */}
+            <div className="flex justify-center space-x-6">
+                {(product.images?.length > 1 ? product.images : [null, null, null]).map((img, i) => (
+                    <motion.button
+                        key={i}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setSelectedImage(i)}
+                        className={`w-28 h-28 rounded-3xl border transition-all overflow-hidden shrink-0 flex items-center justify-center bg-white/[0.02] relative group ${
+                            selectedImage === i ? "border-white" : "border-white/5 hover:border-white/10"
+                        }`}
+                    >
+                        {img ? (
+                          <Image src={img} alt="" fill className="object-contain p-4 grayscale opacity-40 group-hover:opacity-100 group-hover:grayscale-0 transition-all" />
+                        ) : (
+                          <div className="text-white/5 font-black text-2xl italic tracking-tighter">{i+1}</div>
+                        )}
+                        {selectedImage === i && (
+                           <motion.div layoutId="thumb-active" className="absolute bottom-1 w-8 h-0.5 bg-white rounded-full" />
+                        )}
+                    </motion.button>
+                ))}
+            </div>
           </div>
 
-          <div className="space-y-12">
-            <header className="space-y-6">
-              <div className="flex items-center justify-between">
-                <span className="px-4 py-1.5 bg-white/5 border border-white/10 rounded-full text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
-                    {product.category}
-                </span>
-                <button className="p-3 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 transition-all text-white/40 hover:text-white">
+          {/* Right: Technical Specifications & Commerce */}
+          <div className="lg:col-span-5 flex flex-col justify-center">
+            <header className="space-y-8 mb-16">
+              <div className="flex items-center space-x-4">
+                 <div className="bg-white/5 border border-white/10 rounded-full px-5 py-2 flex items-center space-x-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/40 italic">Synchronized</span>
+                 </div>
+                 <button className="w-12 h-12 bg-white/5 border border-white/10 rounded-full flex items-center justify-center hover:bg-white/10 transition-all text-white/30 hover:text-white">
                     <Share2 size={16} />
                 </button>
               </div>
-              <h1 className="text-6xl md:text-8xl font-black tracking-tighter uppercase leading-[0.85]">
+
+              <motion.h1 
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-7xl md:text-9xl font-black tracking-tighter uppercase leading-[0.8] italic underline decoration-white/5 underline-offset-[20px]"
+              >
                 {product.name.split(' ').map((word, i) => (
-                    <React.Fragment key={i}>
-                        {i === 1 ? <span className="text-white/20 italic block">{word}</span> : word + ' '}
-                    </React.Fragment>
+                    <span key={i} className={i === 1 ? "text-transparent bg-clip-text bg-gradient-to-r from-white/20 to-transparent block mt-2" : "block"}>
+                        {word}
+                    </span>
                 ))}
-              </h1>
-              <div className="flex items-end space-x-4">
-                <span className="text-5xl font-black tracking-tighter">₹{product.price.toLocaleString('en-IN')}</span>
-                <span className="text-xl text-white/20 line-through mb-1">₹{(product.price * 1.3).toFixed(0)}</span>
-                <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[10px] font-black uppercase tracking-widest mb-2">Save 30%</span>
+              </motion.h1>
+
+              <div className="flex items-end space-x-6 pt-4">
+                <div className="space-y-1">
+                   <p className="text-[9px] uppercase tracking-[0.6em] font-black text-white/20 italic">Unit Price</p>
+                   <span className="text-6xl font-black tracking-tighter italic">₹{product.price.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-2 rounded-2xl flex items-center space-x-2 mb-2">
+                   <Zap size={14} className="animate-bounce" />
+                   <span className="text-[10px] font-black uppercase tracking-[0.2em] italic">Instant Ship</span>
+                </div>
               </div>
             </header>
 
-            <div className="space-y-8">
-                <p className="text-lg text-white/60 leading-relaxed font-medium">
+            <div className="space-y-12">
+                <p className="text-xl text-white/40 leading-relaxed font-medium max-w-lg italic">
                     {product.description}
                 </p>
 
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="p-6 bg-[#111111] rounded-3xl border border-white/5 space-y-3">
-                        <Shield size={24} className="text-white/40" />
-                        <p className="text-[10px] uppercase tracking-widest font-black text-white/20">Durability</p>
-                        <p className="text-sm font-bold">Titanium Alloy Grade 5</p>
+                {/* Specs Grid */}
+                <div className="grid grid-cols-2 gap-6 pb-12 border-b border-white/5">
+                    <div className="p-8 bg-white/[0.02] rounded-[40px] border border-white/5 space-y-4 group hover:bg-white/[0.04] transition-all">
+                        <Shield size={28} className="text-white/20 group-hover:text-white transition-colors" />
+                        <div className="space-y-1">
+                           <p className="text-[9px] uppercase tracking-[0.4em] font-black text-white/20">Durability</p>
+                           <p className="text-sm font-black uppercase italic tracking-tight">Reinforced Composite</p>
+                        </div>
                     </div>
-                    <div className="p-6 bg-[#111111] rounded-3xl border border-white/5 space-y-3">
-                        <Zap size={24} className="text-white/40" />
-                        <p className="text-[10px] uppercase tracking-widest font-black text-white/20">Technology</p>
-                        <p className="text-sm font-bold">MagSafe Optimized</p>
+                    <div className="p-8 bg-white/[0.02] rounded-[40px] border border-white/5 space-y-4 group hover:bg-white/[0.04] transition-all">
+                        <Cpu size={28} className="text-white/20 group-hover:text-white transition-colors" />
+                        <div className="space-y-1">
+                           <p className="text-[9px] uppercase tracking-[0.4em] font-black text-white/20">Technology</p>
+                           <p className="text-sm font-black uppercase italic tracking-tight">AeroSync V2.0</p>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div className="space-y-8 pt-8 border-t border-white/5">
-                <div className="flex flex-col md:flex-row items-center gap-6">
-                    <div className="flex items-center space-x-6 bg-[#111111] border border-white/5 p-2 rounded-full w-full md:w-auto">
+                {/* Purchase Area */}
+                <div className="space-y-8 pt-4">
+                   <div className="flex flex-col md:flex-row items-center gap-8">
+                        <div className="flex items-center space-x-8 bg-white/5 border border-white/5 p-2 rounded-3xl w-full md:w-fit md:px-4">
+                            <button 
+                                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                                className="w-14 h-14 flex items-center justify-center hover:bg-white/10 rounded-2xl transition-all"
+                            >
+                                <Minus size={18} className="text-white/40 hover:text-white" />
+                            </button>
+                            <span className="text-2xl font-black w-8 text-center italic">{quantity}</span>
+                            <button 
+                                onClick={() => setQuantity(quantity + 1)}
+                                className="w-14 h-14 flex items-center justify-center hover:bg-white/10 rounded-2xl transition-all"
+                            >
+                                <Plus size={18} className="text-white/40 hover:text-white" />
+                            </button>
+                        </div>
                         <button 
-                            onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                            className="w-12 h-12 flex items-center justify-center hover:bg-white/5 rounded-full transition-colors"
+                            onClick={handleAddToCart}
+                            className="flex-1 w-full py-8 bg-white text-black font-black uppercase tracking-[0.5em] text-[10px] rounded-[30px] hover:bg-neutral-200 active:scale-95 transition-all shadow-[0_20px_80px_rgba(255,255,255,0.1)] group flex items-center justify-center space-x-4"
                         >
-                            <Minus size={16} />
-                        </button>
-                        <span className="text-lg font-black w-8 text-center">{quantity}</span>
-                        <button 
-                            onClick={() => setQuantity(quantity + 1)}
-                            className="w-12 h-12 flex items-center justify-center hover:bg-white/5 rounded-full transition-colors"
-                        >
-                            <Plus size={16} />
+                            <span>Initialize Deployment</span>
+                            <ArrowRight size={16} className="group-hover:translate-x-2 transition-transform" />
                         </button>
                     </div>
-                    <button 
-                        onClick={handleAddToCart}
-                        className="flex-1 w-full py-6 bg-white text-black font-black uppercase tracking-[0.2em] text-xs rounded-full hover:bg-white/90 active:scale-95 transition-all shadow-[0_0_50px_rgba(255,255,255,0.15)]"
-                    >
-                        Add to Bag
-                    </button>
-                </div>
 
-                <div className="flex items-center space-x-6 justify-center md:justify-start">
-                    <div className="flex items-center space-x-2 text-[10px] uppercase tracking-widest font-black text-white/20">
-                        <Package size={14} />
-                        <span>Free Shipping in India</span>
-                    </div>
-                    <div className="w-1 h-1 bg-white/10 rounded-full" />
-                    <div className="flex items-center space-x-2 text-[10px] uppercase tracking-widest font-black text-white/20">
-                        <Shield size={14} />
-                        <span>1 Year Warranty</span>
+                    <div className="grid grid-cols-2 gap-8 text-[9px] uppercase tracking-[0.4em] font-black text-white/20">
+                       <div className="flex items-center space-x-3">
+                          <Globe size={14} />
+                          <span>Airborne Logistics</span>
+                       </div>
+                       <div className="flex items-center space-x-3">
+                          <Package size={14} />
+                          <span>Archive Quality</span>
+                       </div>
                     </div>
                 </div>
             </div>
           </div>
         </div>
 
-        <section className="mt-40 py-32 border-t border-white/5">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
-                <div className="space-y-12">
-                    <h2 className="text-6xl font-black tracking-tighter uppercase leading-[0.85]">
-                        Engineered for the <br />
-                        <span className="text-white/10 italic">Unexpected.</span>
+        {/* Technical Deep Dive */}
+        <section className="mt-60 pt-40 border-t border-white/5">
+            <div className="flex items-center space-x-4 text-white/10 mb-20 overflow-hidden">
+               <span className="text-[12vw] font-black tracking-tighter uppercase italic select-none">ARCHITECTURE</span>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-32 items-center">
+                <div className="space-y-16">
+                    <h2 className="text-7xl font-black tracking-tighter uppercase leading-[0.85] italic">
+                        Forged in the <br />
+                        <span className="text-white/10">Future.</span>
                     </h2>
-                    <div className="space-y-8 text-white/40 text-lg leading-relaxed font-medium">
+                    <div className="space-y-10 text-white/40 text-xl leading-relaxed font-medium italic">
                         <p>
-                            We didn&apos;t just design a case; we engineered a sanctuary for your gear. 
-                            The {product.name} is the result of intensive material science research.
+                            The {product.name} isn't a commodity; it's a structural masterpiece. 
+                            Each unit is calibrated for peak protection and thermal optimization.
                         </p>
                         <p>
-                            By combining high-performance materials with our proprietary 
-                            polymer, we&apos;ve achieved a protection-to-weight ratio that defines 
-                            the future of daily carry.
+                            We've utilized high-density graphene composites to ensure the 
+                            structural integrity remains uncompromised under extreme 
+                            gravitational or thermal stress.
                         </p>
+                    </div>
+                    <div className="flex space-x-12">
+                       <div className="space-y-2">
+                          <p className="text-4xl font-black italic tracking-tighter">0.3mm</p>
+                          <p className="text-[10px] uppercase tracking-widest font-black text-white/20">Precision Edge</p>
+                       </div>
+                       <div className="space-y-2">
+                          <p className="text-4xl font-black italic tracking-tighter">100%</p>
+                          <p className="text-[10px] uppercase tracking-widest font-black text-white/20">Recyclable Payload</p>
+                       </div>
                     </div>
                 </div>
-                <div className="relative aspect-square bg-[#111111] rounded-[60px] overflow-hidden">
-                    <div className="absolute inset-0 bg-linear-to-br from-white/5 to-transparent" />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-white/5 font-black text-[12rem] tracking-tighter uppercase select-none -rotate-12">
-                            NAVIOR
-                        </span>
+                <div className="relative aspect-square bg-white/[0.02] rounded-[80px] overflow-hidden group">
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 flex items-center justify-center p-32">
+                        <Sparkles className="w-full h-full text-white/[0.03] group-hover:text-white/[0.08] transition-all" strokeWidth={0.5} />
                     </div>
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] border-1 border-white/5 rounded-full animate-[spin_20s_linear_infinite]" />
                 </div>
             </div>
         </section>
       </div>
 
-      <footer className="py-20 border-t border-white/5 text-center text-white/20 uppercase tracking-[0.3em] text-[10px] font-bold">
-        © 2026 Navior Studios. Engineered for the future.
+      <footer className="p-20 text-center border-t border-white/5">
+        <p className="text-[9px] uppercase tracking-[1em] font-black text-white/10 italic">
+          Navior Studios Research Lab | Series 01.v2
+        </p>
       </footer>
     </main>
   );

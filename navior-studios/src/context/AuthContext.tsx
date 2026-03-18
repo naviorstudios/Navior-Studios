@@ -5,114 +5,150 @@ import {
   onAuthStateChanged, 
   User, 
   signOut as firebaseSignOut,
-  isSignInWithEmailLink,
-  signInWithEmailLink,
+  signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInWithEmailAndPassword
+  signInWithPopup,
+  GoogleAuthProvider,
+  RecaptchaVerifier,
+  signInWithPhoneNumber
 } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { auth } from "@/lib/firebase";
+import axios from "axios";
 
 interface AuthContextType {
-  user: User | null;
+  user: User | any | null;
   loading: boolean;
-  userData: any | null;
-  signOut: () => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  isSimulation: boolean;
+  toggleSimulation: () => void;
+  login: (email: string, pass: string) => Promise<void>;
+  signup: (email: string, pass: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  loading: true,
-  userData: null,
-  signOut: async () => {},
-  login: async () => {},
-  signup: async () => {},
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [userData, setUserData] = useState<any | null>(null);
+const MOCK_USER = {
+  uid: "sim-elite-001",
+  email: "elite.member@navior.com",
+  displayName: "Elite Member",
+  photoURL: "https://api.dicebear.com/7.x/avataaars/svg?seed=Navior",
+  emailVerified: true,
+};
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSimulation, setIsSimulation] = useState(false);
 
   useEffect(() => {
-    // Handle automatic email link sign-in
-    const handleEmailLinkSignIn = async () => {
-      if (isSignInWithEmailLink(auth, window.location.href)) {
-        let email = window.localStorage.getItem("emailForSignIn");
-        
-        if (!email) {
-          // If email is missing (different device/browser), we might need to prompt
-          // For now, we'll let the specific finish-signup page handle the prompt
-          // but we can at least try to complete it if email exists.
-          return;
-        }
-
-        try {
-          await signInWithEmailLink(auth, email, window.location.href);
-          window.localStorage.removeItem("emailForSignIn");
-          // The onAuthStateChanged listener below will pick up the new user state
-        } catch (error) {
-          console.error("Error completing email link sign-in:", error);
-        }
-      }
-    };
-
-    handleEmailLinkSignIn();
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
-      
-      if (user) {
-        // Fetch additional user data from Firestore
-        const userDocRef = doc(db, "users", user.uid);
-        const userDoc = await getDoc(userDocRef);
-        
-        if (userDoc.exists()) {
-          setUserData(userDoc.data());
-        } else {
-          // AUTOMATION: Initialize user in Firestore if they don't exist
-          const newUserData = {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName || "Member",
-            photoURL: user.photoURL || null,
-            phone: user.phoneNumber || null,
-            role: "customer",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-          await setDoc(userDocRef, newUserData);
-          setUserData(newUserData);
-        }
-      } else {
-        setUserData(null);
-      }
-      
+    const savedSim = localStorage.getItem("navior_simulation_mode") === "true";
+    if (savedSim) {
+      setIsSimulation(true);
+      setUser(MOCK_USER);
       setLoading(false);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      try {
+        if (firebaseUser) {
+          // Sync with our backend
+          await axios.post("/api/user/sync", {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+          });
+          setUser(firebaseUser);
+        } else {
+          setUser(null);
+        }
+      } catch (error: any) {
+        console.error("Auth sync error:", error);
+      } finally {
+        setLoading(false);
+      }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [auth]);
 
-  const signOut = async () => {
+  const handleAuthError = (error: any) => {
+    console.error("Firebase Auth Error:", error);
+    if (error.code === "auth/permission-denied" || error.message?.includes("suspended")) {
+       throw new Error("API SUSPENDED: Please use 'Lab Simulation Mode' to bypass this restricted session.");
+    }
+    throw error;
+  };
+
+  const login = async (email: string, pass: string) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (e) {
+      handleAuthError(e);
+    }
+  };
+
+  const signup = async (email: string, pass: string) => {
+    try {
+      await createUserWithEmailAndPassword(auth, email, pass);
+    } catch (e) {
+      handleAuthError(e);
+    }
+  };
+
+  const loginWithGoogle = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (e) {
+      handleAuthError(e);
+    }
+  };
+
+  const logout = async () => {
+    if (isSimulation) {
+      setIsSimulation(false);
+      localStorage.removeItem("navior_simulation_mode");
+      setUser(null);
+      return;
+    }
     await firebaseSignOut(auth);
   };
 
-  const login = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
-  };
-
-  const signup = async (email: string, password: string) => {
-    await createUserWithEmailAndPassword(auth, email, password);
+  const toggleSimulation = () => {
+    const newState = !isSimulation;
+    setIsSimulation(newState);
+    if (newState) {
+      localStorage.setItem("navior_simulation_mode", "true");
+      setUser(MOCK_USER);
+    } else {
+      localStorage.removeItem("navior_simulation_mode");
+      setUser(null);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, userData, signOut, login, signup }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      logout, 
+      isSimulation, 
+      toggleSimulation,
+      login,
+      signup,
+      loginWithGoogle
+    }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+};

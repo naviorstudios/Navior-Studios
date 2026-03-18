@@ -4,31 +4,48 @@ import React, { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import { useCartStore } from "@/store/useCartStore";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
+import { useFormValidation, commonValidationRules } from "@/hooks/useFormValidation";
 import { useRouter } from "next/navigation";
-import { db } from "@/lib/firebase";
-import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
 import axios from "axios";
-import { CreditCard, Truck, ShieldCheck, ArrowRight, X } from "lucide-react";
+import { 
+  CreditCard, 
+  Truck, 
+  ShieldCheck, 
+  ArrowRight, 
+  X, 
+  ChevronRight, 
+  Package, 
+  MapPin, 
+  Lock,
+  Cpu,
+  Zap
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const CheckoutPage = () => {
   const { cart, getTotal, clearCart } = useCartStore();
-  const { user, userData, login, signup } = useAuth();
+  const { user, isSimulation } = useAuth();
+  const { success: showSuccess, error: showError } = useToast();
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [paymentStep, setPaymentStep] = useState(user ? 2 : 1); // 1: Auth, 2: Shipping, 3: Payment, 4: Success
 
-  const [authData, setAuthData] = useState({
-    email: "",
-    password: "",
-    confirmPassword: "",
-    isLogin: true,
+  const [loading, setLoading] = useState(false);
+  const [paymentStep, setPaymentStep] = useState(1); // 1: Shipping, 2: Payment, 3: Success
+
+  const shippingValidation = useFormValidation({
+    name: commonValidationRules.name,
+    email: commonValidationRules.email,
+    phone: commonValidationRules.phone,
+    address: commonValidationRules.address,
+    city: commonValidationRules.city,
+    state: commonValidationRules.state,
+    zip: commonValidationRules.zipCode
   });
 
   const [shippingData, setShippingData] = useState({
-    name: userData?.displayName || "",
+    name: user?.displayName || "",
     email: user?.email || "",
-    phone: userData?.phone || "",
+    phone: "",
     address: "",
     city: "",
     state: "",
@@ -36,37 +53,10 @@ const CheckoutPage = () => {
   });
 
   useEffect(() => {
-    if (cart.length === 0 && paymentStep !== 4) {
+    if (cart.length === 0 && paymentStep !== 3) {
       router.push("/collection");
     }
   }, [cart, router, paymentStep]);
-
-  const handleAuthInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAuthData({ ...authData, [e.target.name]: e.target.value });
-  };
-
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      if (authData.isLogin) {
-        await login(authData.email, authData.password);
-      } else {
-        if (authData.password !== authData.confirmPassword) {
-          alert("Passwords don't match");
-          setLoading(false);
-          return;
-        }
-        await signup(authData.email, authData.password);
-      }
-      setPaymentStep(2); // Move to shipping after successful auth
-    } catch (error: any) {
-      alert(error.message || "Authentication failed");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setShippingData({ ...shippingData, [e.target.name]: e.target.value });
@@ -82,39 +72,44 @@ const CheckoutPage = () => {
     });
   };
 
+  const handleShippingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const isValid = shippingValidation.validateForm(shippingData);
+    if (!isValid) {
+      showError("Field Error", "Check your shipping coordinates.");
+      return;
+    }
+    setPaymentStep(2);
+  };
+
   const handlePayment = async () => {
     setLoading(true);
 
+    // SIMULATION MODE BYPASS
+    if (isSimulation) {
+      setTimeout(() => {
+        showSuccess("Simulation Verified", "Payment processed via Lab Simulation Protocol.");
+        clearCart();
+        setPaymentStep(3);
+        setLoading(false);
+      }, 2000);
+      return;
+    }
+
     const res = await loadRazorpay();
     if (!res) {
-      alert("Razorpay SDK failed to load. Are you online?");
+      showError("Payment Error", "Razorpay SDK failed to load.");
       setLoading(false);
       return;
     }
 
     try {
-      // 1. Create order on server
       const { data: orderData } = await axios.post("/api/razorpay", {
         amount: getTotal(),
         currency: "INR",
         receipt: `receipt_${Date.now()}`,
       });
 
-      // 2. Pre-create order in Firestore with "pending" status
-      const { db } = await import("@/lib/firebase");
-      const { collection, addDoc } = await import("firebase/firestore");
-      
-      await addDoc(collection(db, "orders"), {
-        userId: user?.uid || "guest",
-        items: cart,
-        total: getTotal(),
-        shippingData,
-        paymentStatus: "pending",
-        razorpayOrderId: orderData.id,
-        createdAt: new Date().toISOString(),
-      });
-
-      // 3. Open Razorpay Checkout
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: orderData.amount,
@@ -124,40 +119,23 @@ const CheckoutPage = () => {
         order_id: orderData.id,
         handler: async (response: any) => {
           try {
-            // 3. Verify payment signature on the server
             const verifyRes = await axios.post("/api/razorpay/verify", {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
+              shippingData,
+              items: cart,
+              total: getTotal()
             });
 
             if (verifyRes.data.message === "Payment verified successfully") {
-              // Update order status to completed
-              const { db } = await import("@/lib/firebase");
-              const { collection, query, where, getDocs, updateDoc } = await import("firebase/firestore");
-              
-              const ordersRef = collection(db, "orders");
-              const q = query(ordersRef, where("razorpayOrderId", "==", response.razorpay_order_id));
-              const querySnapshot = await getDocs(q);
-              
-              if (!querySnapshot.empty) {
-                const orderDoc = querySnapshot.docs[0];
-                await updateDoc(orderDoc.ref, {
-                  paymentStatus: "completed",
-                  razorpayPaymentId: response.razorpay_payment_id,
-                  razorpaySignature: response.razorpay_signature,
-                  completedAt: new Date().toISOString(),
-                });
-              }
-              
               clearCart();
-              setPaymentStep(4);
+              setPaymentStep(3);
             } else {
-              alert("Payment verification failed. Please contact support.");
+              showError("Payment Verification Failed", "Check your transmission signature.");
             }
-          } catch (error) {
-            console.error("Verification error:", error);
-            alert("An error occurred during verification.");
+          } catch (verificationError) {
+             showError("Verification Error", "Sync lost during payment verification.");
           }
         },
         prefill: {
@@ -165,108 +143,124 @@ const CheckoutPage = () => {
           email: shippingData.email,
           contact: shippingData.phone,
         },
-        theme: {
-          color: "#000000",
-        },
+        theme: { color: "#000000" },
       };
 
       const paymentObject = new (window as any).Razorpay(options);
       paymentObject.open();
-    } catch (error) {
-      console.error("Payment failed:", error);
-      alert("Payment failed. Please try again.");
+    } catch (paymentError) {
+      showError("Payment Failed", "Transaction rejected by Gateway.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-black text-white">
+    <main className="min-h-screen bg-[#050505] text-white selection:bg-white selection:text-black">
       <Navbar />
 
-      <div className="pt-32 pb-20 container mx-auto px-6 max-w-6xl">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
-          {/* Checkout Steps */}
-          <div className="space-y-12">
-            <header className="space-y-4">
-              <span className="text-xs uppercase tracking-[0.4em] font-bold text-white/30">
-                  Secure Checkout
-              </span>
-              <h1 className="text-6xl md:text-8xl font-bold tracking-tighter">
-                  Checkout.
-              </h1>
-            </header>
+      <div className="pt-32 pb-40 px-6 container mx-auto max-w-[1400px]">
+        {/* Step Indicator */}
+        <div className="mb-20 flex items-center space-x-4 overflow-x-auto no-scrollbar pb-4">
+           {[
+             { id: 1, label: "Logistics", icon: MapPin },
+             { id: 2, label: "Payment", icon: CreditCard },
+             { id: 3, label: "Success", icon: ShieldCheck }
+           ].map((step, i) => (
+             <React.Fragment key={step.id}>
+               <div className={`flex items-center space-x-3 shrink-0 ${paymentStep === step.id ? "text-white" : "text-white/20"}`}>
+                 <div className={`w-10 h-10 rounded-2xl border flex items-center justify-center transition-colors ${
+                   paymentStep >= step.id ? "bg-white text-black border-white" : "bg-white/5 border-white/5"
+                 }`}>
+                   <step.icon size={18} />
+                 </div>
+                 <span className="text-[10px] uppercase tracking-[0.4em] font-black italic">{step.label}</span>
+               </div>
+               {i < 2 && <div className="w-8 h-px bg-white/5" />}
+             </React.Fragment>
+           ))}
+        </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-20 lg:gap-32">
+          
+          {/* Left: Main Form Area */}
+          <div className="lg:col-span-7">
             <AnimatePresence mode="wait">
               {paymentStep === 1 && (
                 <motion.div
+                  key="shipping"
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
-                  className="space-y-8"
+                  className="space-y-16"
                 >
-                  <div className="flex items-center space-x-4 mb-8">
-                    <div className="w-10 h-10 bg-white text-black rounded-full flex items-center justify-center font-bold">1</div>
-                    <h2 className="text-2xl font-bold tracking-tight">Account</h2>
-                  </div>
+                  <header className="space-y-4">
+                    <h1 className="text-7xl md:text-9xl font-black tracking-tighter italic uppercase underline decoration-white/10 underline-offset-[20px]">
+                        Lgs.<br/>Sync.
+                    </h1>
+                  </header>
 
-                  <form onSubmit={handleAuthSubmit} className="space-y-6">
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] uppercase tracking-widest font-bold text-white/40">Email Address</label>
-                        <input
-                          type="email"
-                          name="email"
-                          value={authData.email}
-                          onChange={handleAuthInputChange}
-                          required
-                          className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 focus:outline-none focus:border-white/20"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] uppercase tracking-widest font-bold text-white/40">Password</label>
-                        <input
-                          type="password"
-                          name="password"
-                          value={authData.password}
-                          onChange={handleAuthInputChange}
-                          required
-                          className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 focus:outline-none focus:border-white/20"
-                        />
-                      </div>
-                      {!authData.isLogin && (
-                        <div className="space-y-2">
-                          <label className="text-[10px] uppercase tracking-widest font-bold text-white/40">Confirm Password</label>
-                          <input
-                            type="password"
-                            name="confirmPassword"
-                            value={authData.confirmPassword}
-                            onChange={handleAuthInputChange}
-                            required
-                            className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 focus:outline-none focus:border-white/20"
-                          />
-                        </div>
-                      )}
+                  <form onSubmit={handleShippingSubmit} className="space-y-12">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-10">
+                       <div className="space-y-3">
+                         <label className="text-[9px] uppercase tracking-[0.5em] font-black text-white/30">Member Name</label>
+                         <input
+                           name="name"
+                           value={shippingData.name}
+                           onChange={handleInputChange}
+                           required
+                           className="w-full bg-white/5 border border-white/5 rounded-2xl py-6 px-8 focus:outline-none focus:border-white/20 transition-all text-xs font-black tracking-widest uppercase italic"
+                         />
+                       </div>
+                       <div className="space-y-3">
+                         <label className="text-[9px] uppercase tracking-[0.5em] font-black text-white/30">Contact Frequency</label>
+                         <input
+                           name="phone"
+                           placeholder="+91"
+                           value={shippingData.phone}
+                           onChange={handleInputChange}
+                           required
+                           className="w-full bg-white/5 border border-white/5 rounded-2xl py-6 px-8 focus:outline-none focus:border-white/20 transition-all text-xs font-black tracking-widest uppercase italic"
+                         />
+                       </div>
+                       <div className="space-y-3 md:col-span-2">
+                         <label className="text-[9px] uppercase tracking-[0.5em] font-black text-white/30">Station Address</label>
+                         <input
+                           name="address"
+                           value={shippingData.address}
+                           onChange={handleInputChange}
+                           required
+                           className="w-full bg-white/5 border border-white/5 rounded-2xl py-6 px-8 focus:outline-none focus:border-white/20 transition-all text-xs font-black tracking-widest uppercase italic"
+                         />
+                       </div>
+                       <div className="space-y-3">
+                         <label className="text-[9px] uppercase tracking-[0.5em] font-black text-white/30">City</label>
+                         <input
+                           name="city"
+                           value={shippingData.city}
+                           onChange={handleInputChange}
+                           required
+                           className="w-full bg-white/5 border border-white/5 rounded-2xl py-6 px-8 focus:outline-none focus:border-white/20 transition-all text-xs font-black tracking-widest uppercase italic"
+                         />
+                       </div>
+                       <div className="space-y-3">
+                         <label className="text-[9px] uppercase tracking-[0.5em] font-black text-white/30">ZIP Coordinates</label>
+                         <input
+                           name="zip"
+                           value={shippingData.zip}
+                           onChange={handleInputChange}
+                           required
+                           className="w-full bg-white/5 border border-white/5 rounded-2xl py-6 px-8 focus:outline-none focus:border-white/20 transition-all text-xs font-black tracking-widest uppercase italic"
+                         />
+                       </div>
                     </div>
 
                     <button
                       type="submit"
-                      disabled={loading}
-                      className="w-full py-5 bg-white text-black font-black uppercase tracking-[0.2em] text-xs rounded-xl flex items-center justify-center space-x-3 hover:bg-white/90 transition-all disabled:opacity-50"
+                      className="w-full py-8 bg-white text-black font-black uppercase tracking-[0.5em] text-[10px] rounded-3xl flex items-center justify-center space-x-6 hover:bg-neutral-200 transition-all shadow-[0_20px_60px_rgba(255,255,255,0.1)] active:scale-95 group"
                     >
-                      {loading ? (
-                        <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <span>{authData.isLogin ? "Sign In" : "Create Account"}</span>
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setAuthData({ ...authData, isLogin: !authData.isLogin })}
-                      className="w-full text-center text-white/40 hover:text-white transition-colors text-sm"
-                    >
-                      {authData.isLogin ? "Need an account? Create one" : "Already have an account? Sign in"}
+                      <span>Lock Logistics</span>
+                      <ArrowRight size={16} className="group-hover:translate-x-2 transition-transform" />
                     </button>
                   </form>
                 </motion.div>
@@ -274,200 +268,159 @@ const CheckoutPage = () => {
 
               {paymentStep === 2 && (
                 <motion.div
+                  key="payment"
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
-                  className="space-y-8"
+                  className="space-y-16"
                 >
-                  <div className="flex items-center space-x-4 mb-8">
-                    <div className="w-10 h-10 bg-white text-black rounded-full flex items-center justify-center font-bold">2</div>
-                    <h2 className="text-2xl font-bold tracking-tight">Shipping Information</h2>
+                  <header className="space-y-4">
+                    <h1 className="text-7xl md:text-9xl font-black tracking-tighter italic uppercase underline decoration-white/10 underline-offset-[20px]">
+                        Pymt.<br/>Auth.
+                    </h1>
+                  </header>
+
+                  <div className="space-y-8">
+                     <div className="p-10 rounded-[40px] bg-white/5 border border-white/10 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-8 text-white/5">
+                           <Lock size={120} strokeWidth={0.5} />
+                        </div>
+                        <div className="relative z-10 space-y-6">
+                           <div className="flex items-center space-x-4">
+                              <div className="w-16 h-16 bg-white flex items-center justify-center rounded-2xl">
+                                 <Zap size={32} className="text-black" />
+                              </div>
+                              <div className="space-y-1">
+                                 <h3 className="text-2xl font-black uppercase italic">Razorpay Protocol</h3>
+                                 <p className="text-[10px] uppercase tracking-[0.3em] font-black text-white/30 italic">Secure Encrypted Frequency</p>
+                              </div>
+                           </div>
+                           <p className="text-xs text-white/40 max-w-sm leading-relaxed uppercase tracking-tighter font-medium">
+                              You will be redirected to the secure portal to finalize the transaction. All transmissions are end-to-end encrypted.
+                           </p>
+                        </div>
+                     </div>
+
+                     <div className="grid grid-cols-2 gap-6">
+                        <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/5 space-y-3">
+                           <ShieldCheck size={20} className="text-white/30" />
+                           <h4 className="text-[10px] font-black uppercase tracking-widest">Encrypted</h4>
+                        </div>
+                        <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/5 space-y-3">
+                           <Cpu size={20} className="text-white/30" />
+                           <h4 className="text-[10px] font-black uppercase tracking-widest">Validated</h4>
+                        </div>
+                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40">Full Name</label>
-                      <input
-                        name="name"
-                        value={shippingData.name}
-                        onChange={handleInputChange}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 focus:outline-none focus:border-white/20"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40">Phone Number</label>
-                      <input
-                        name="phone"
-                        value={shippingData.phone}
-                        onChange={handleInputChange}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 focus:outline-none focus:border-white/20"
-                      />
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40">Address</label>
-                      <input
-                        name="address"
-                        value={shippingData.address}
-                        onChange={handleInputChange}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 focus:outline-none focus:border-white/20"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40">City</label>
-                      <input
-                        name="city"
-                        value={shippingData.city}
-                        onChange={handleInputChange}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 focus:outline-none focus:border-white/20"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] uppercase tracking-widest font-bold text-white/40">ZIP Code</label>
-                      <input
-                        name="zip"
-                        value={shippingData.zip}
-                        onChange={handleInputChange}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-6 focus:outline-none focus:border-white/20"
-                      />
-                    </div>
+                  <div className="flex flex-col space-y-6">
+                    <button
+                      onClick={handlePayment}
+                      disabled={loading}
+                      className="w-full py-8 bg-white text-black font-black uppercase tracking-[0.5em] text-[10px] rounded-3xl flex items-center justify-center space-x-6 hover:bg-neutral-200 transition-all shadow-[0_20px_60px_rgba(255,255,255,0.1)] active:scale-95"
+                    >
+                      {loading ? (
+                        <div className="w-6 h-6 border-3 border-black border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <span>{isSimulation ? "Simulate Payment" : "Authenticate & Pay"}</span>
+                          <ArrowRight size={16} />
+                        </>
+                      )}
+                    </button>
+                    <button 
+                      onClick={() => setPaymentStep(1)}
+                      className="text-[10px] uppercase tracking-[0.4em] font-black text-white/20 hover:text-white transition-colors italic"
+                    >
+                      Modify Logistics Coordinates
+                    </button>
                   </div>
-
-                  <button
-                    onClick={() => setPaymentStep(3)}
-                    className="w-full py-5 bg-white text-black font-black uppercase tracking-[0.2em] text-xs rounded-xl flex items-center justify-center space-x-3 hover:bg-white/90 transition-all"
-                  >
-                    <span>Proceed to Payment</span>
-                    <ArrowRight size={16} />
-                  </button>
                 </motion.div>
               )}
 
               {paymentStep === 3 && (
                 <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  className="space-y-8"
-                >
-                  <div className="flex items-center space-x-4 mb-8">
-                    <button 
-                      onClick={() => setPaymentStep(2)}
-                      className="w-10 h-10 bg-white/10 text-white rounded-full flex items-center justify-center font-bold"
-                    >2</button>
-                    <div className="w-10 h-10 bg-white text-black rounded-full flex items-center justify-center font-bold">3</div>
-                    <h2 className="text-2xl font-bold tracking-tight">Payment Method</h2>
-                  </div>
-
-                  <div className="glass p-8 rounded-2xl border border-white/10 space-y-6">
-                    <div className="flex items-center space-x-4">
-                        <div className="p-3 bg-white/10 rounded-lg">
-                            <CreditCard size={24} />
-                        </div>
-                        <div>
-                            <p className="font-bold">Razorpay Secure Payment</p>
-                            <p className="text-xs text-white/40">UPI, Cards, Netbanking, Wallets</p>
-                        </div>
-                    </div>
-                    <p className="text-sm text-white/40 leading-relaxed">
-                        After clicking “Pay Now”, you will be redirected to Razorpay to complete your purchase securely.
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={handlePayment}
-                    disabled={loading}
-                    className="w-full py-5 bg-white text-black font-black uppercase tracking-[0.2em] text-xs rounded-xl flex items-center justify-center space-x-3 hover:bg-white/90 transition-all disabled:opacity-50"
-                  >
-                    {loading ? (
-                        <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                        <>
-                            <span>Pay Now</span>
-                            <ArrowRight size={16} />
-                        </>
-                    )}
-                  </button>
-                </motion.div>
-              )}
-
-              {paymentStep === 4 && (
-                <motion.div
+                  key="success"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="text-center py-20 space-y-8"
+                  className="text-center py-20 space-y-12"
                 >
-                  <div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center mx-auto">
-                    <ShieldCheck size={48} className="text-white" />
+                  <div className="w-40 h-40 bg-white/5 rounded-full flex items-center justify-center mx-auto border border-white/10 ring-1 ring-white/5 ring-inset shadow-2xl">
+                    <ShieldCheck size={80} className="text-white animate-pulse" strokeWidth={1} />
                   </div>
-                  <div className="space-y-4">
-                    <h2 className="text-5xl font-bold tracking-tighter">Order Placed.</h2>
-                    <p className="text-white/40 uppercase tracking-widest text-sm max-w-sm mx-auto">
-                      Thank you for your purchase. We've sent a confirmation to {shippingData.email}.
+                  <div className="space-y-6">
+                    <h2 className="text-7xl md:text-9xl font-black tracking-tighter uppercase italic underline decoration-white/10 underline-offset-[20px]">Success.</h2>
+                    <p className="text-white/40 uppercase tracking-[0.4em] text-[10px] font-black max-w-sm mx-auto leading-relaxed italic">
+                      Gear synchronization complete. Transmission sent to <span className="text-white">{shippingData.email}</span>. Your units are being prepared for deployment.
                     </p>
                   </div>
                   <button
                     onClick={() => router.push("/collection")}
-                    className="px-12 py-4 bg-white text-black font-black uppercase tracking-[0.2em] text-xs rounded-xl hover:bg-white/90 transition-all"
+                    className="px-16 py-6 bg-white text-black font-black uppercase tracking-[0.5em] text-[10px] rounded-3xl hover:bg-neutral-200 transition-all shadow-2xl active:scale-95"
                   >
-                    Back to Collection
+                    Return to Station
                   </button>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* Order Summary */}
-          {paymentStep !== 3 && (
-            <div className="lg:sticky lg:top-32 h-fit space-y-8">
-                <div className="glass p-8 rounded-3xl border border-white/10 space-y-8">
-                    <h3 className="text-xl font-bold tracking-tight">Order Summary</h3>
-                    
-                    <div className="space-y-6">
-                        {cart.map((item) => (
-                            <div key={item.id} className="flex justify-between">
-                                <div className="flex space-x-4">
-                                    <div className="w-16 h-16 bg-white/5 rounded-xl border border-white/5 overflow-hidden shrink-0 flex items-center justify-center text-[8px] font-bold text-white/20">
-                                        {item.name.substring(0, 2)}
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-sm uppercase tracking-tight">{item.name}</p>
-                                        <p className="text-xs text-white/40 uppercase tracking-widest">Qty: {item.quantity}</p>
-                                    </div>
+          {/* Right: Summary Sidebar */}
+          <div className="lg:col-span-5 h-fit lg:sticky lg:top-32">
+             <div className="p-12 rounded-[50px] bg-white/5 border border-white/5 backdrop-blur-3xl space-y-12 relative overflow-hidden">
+                {/* Abstract Line Detail */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-full bg-gradient-to-b from-white/10 via-transparent to-transparent pointer-events-none" />
+
+                <h3 className="text-[10px] uppercase tracking-[0.8em] font-black text-white/20 italic border-b border-white/5 pb-8">Bag Contents</h3>
+                
+                <div className="space-y-10">
+                    {cart.map((item) => (
+                        <div key={item.id} className="flex justify-between items-center group">
+                            <div className="flex items-center space-x-6">
+                                <div className="w-20 h-24 bg-white/5 rounded-2xl border border-white/5 overflow-hidden flex items-center justify-center relative">
+                                    <img src={item.image} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity grayscale group-hover:grayscale-0" alt={item.name} />
+                                    <span className="relative z-10 text-[9px] font-black text-white mix-blend-difference italic">x{item.quantity}</span>
                                 </div>
-                                <span className="font-bold">${(item.price * item.quantity).toFixed(2)}</span>
+                                <div className="space-y-1">
+                                    <p className="text-sm font-black uppercase tracking-tight group-hover:italic transition-all">{item.name}</p>
+                                    <p className="text-[9px] text-white/20 uppercase tracking-[0.3em] font-black font-mono">ID: {item.id.split('-')[1] || "ARC"}</p>
+                                </div>
                             </div>
-                        ))}
-                    </div>
-
-                    <div className="pt-8 border-t border-white/10 space-y-4">
-                        <div className="flex justify-between text-sm">
-                            <span className="text-white/40 uppercase tracking-widest font-black">Subtotal</span>
-                            <span className="font-bold">₹{getTotal().toLocaleString('en-IN')}</span>
+                            <span className="text-lg font-black italic tracking-tighter">₹{(item.price * item.quantity).toLocaleString('en-IN')}</span>
                         </div>
-                        <div className="flex justify-between text-sm">
-                            <span className="text-white/40 uppercase tracking-widest font-black">Shipping</span>
-                            <span className="text-white font-black uppercase tracking-widest">Calculated later</span>
-                        </div>
-                        <div className="flex justify-between items-end pt-4">
-                            <span className="text-xl font-black tracking-tight uppercase">Total</span>
-                            <span className="text-5xl font-black tracking-tighter">₹{getTotal().toLocaleString('en-IN')}</span>
-                        </div>
-                    </div>
+                    ))}
                 </div>
 
-                <div className="flex items-center space-x-4 text-white/20 uppercase tracking-[0.2em] text-[10px] font-bold justify-center">
-                    <div className="flex items-center space-x-2">
-                        <ShieldCheck size={14} />
-                        <span>Secure Checkout</span>
+                <div className="space-y-6 pt-12 border-t border-white/5">
+                    <div className="flex justify-between items-end">
+                       <div className="space-y-1">
+                          <p className="text-[9px] uppercase tracking-[0.4em] font-black text-white/20 italic">Total Station Payload</p>
+                          <h4 className="text-6xl font-black tracking-tighter italic">₹{getTotal().toLocaleString('en-IN')}</h4>
+                       </div>
                     </div>
-                    <div className="w-1 h-1 bg-white/10 rounded-full" />
-                    <div className="flex items-center space-x-2">
-                        <Truck size={14} />
-                        <span>Global Shipping</span>
+                    
+                    <div className="flex items-center space-x-3 text-[10px] font-black uppercase tracking-[0.2em] text-white/20">
+                       <Zap size={12} />
+                       <span>Standard Air Deployment Included</span>
                     </div>
                 </div>
-            </div>
-          )}
+             </div>
+
+             <div className="mt-12 flex justify-center items-center space-x-12 opacity-20 hover:opacity-100 transition-opacity">
+                 <div className="flex flex-col items-center space-y-2">
+                    <ShieldCheck size={20} />
+                    <span className="text-[8px] font-black uppercase tracking-widest">Vaulted</span>
+                 </div>
+                 <div className="flex flex-col items-center space-y-2">
+                    <Package size={20} />
+                    <span className="text-[8px] font-black uppercase tracking-widest">Inspected</span>
+                 </div>
+                 <div className="flex flex-col items-center space-y-2">
+                    <Cpu size={20} />
+                    <span className="text-[8px] font-black uppercase tracking-widest">Automated</span>
+                 </div>
+             </div>
+          </div>
         </div>
       </div>
     </main>
