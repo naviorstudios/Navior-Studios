@@ -63,15 +63,16 @@ const SEED_MANIFEST = [
 export async function POST() {
   try {
      if (!adminDb) return NextResponse.json({ error: "DB Refused" }, { status: 500 });
+     const db = adminDb;
 
-     const batch = adminDb.batch();
+     const batch = db.batch();
 
      // Optional: Clear existing manifest for a clean sync
-     const snapshot = await adminDb.collection("products").get();
+     const snapshot = await db.collection("products").get();
      snapshot.docs.forEach(doc => batch.delete(doc.ref));
 
      SEED_MANIFEST.forEach(p => {
-        const ref = adminDb.collection("products").doc(p.id);
+        const ref = db.collection("products").doc(p.id);
         batch.set(ref, { 
            ...p, 
            updatedAt: FieldValue.serverTimestamp() 
