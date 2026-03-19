@@ -18,7 +18,7 @@ const MarketActivity = () => {
   useEffect(() => {
     const fetchActivities = async () => {
       try {
-        const { data } = await axios.get('http://localhost:5000/api/market-activity');
+        const { data } = await axios.get('/api/market-activity');
         if (data && data.length > 0) setActivities(data);
       } catch (err) {
         console.warn("Market Beacon Offline - Using Fallback Protocols");

@@ -34,7 +34,7 @@ const CollectionPage = () => {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const { data } = await axios.get(`http://localhost:5000/api/products`, {
+      const { data } = await axios.get(`/api/products`, {
         params: { category: activeCategory, sortBy, order }
       });
       setProducts(data);

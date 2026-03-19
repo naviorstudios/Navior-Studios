@@ -64,9 +64,9 @@ const AdminTerminal = () => {
   const fetchAdminData = async () => {
     setLoading(true);
     try {
-      const { data: prodData } = await axios.get('http://localhost:5000/api/products');
+      const { data: prodData } = await axios.get('/api/products');
       setProducts(prodData);
-      const { data: orderData } = await axios.get('http://localhost:5000/api/market-activity');
+      const { data: orderData } = await axios.get('/api/market-activity');
       setOrders(orderData);
     } catch (err) {
       showError("Station Comms Failure", "Could not synchronize with the admin hub.");
@@ -79,7 +79,7 @@ const AdminTerminal = () => {
     if (!editingProduct) return;
     setLoading(true);
     try {
-      await axios.post('http://localhost:5000/api/products/update', {
+      await axios.post('/api/products/update', {
         id: editingProduct.id,
         price: editingProduct.price,
         stock: editingProduct.stock
