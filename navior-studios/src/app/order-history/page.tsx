@@ -31,7 +31,7 @@ interface OrderItem {
   name: string;
   price: number;
   quantity: number;
-  image: string;
+  images: string[];
 }
 
 interface Order {
@@ -60,19 +60,8 @@ const OrderHistoryPage = () => {
       orderStatus: "deployed",
       createdAt: new Date().toISOString(),
       items: [
-        { id: "1", name: "Titan Shield Pro", price: 2499, quantity: 2, image: "" },
-        { id: "2", name: "Aero Carbon Case", price: 3499, quantity: 1, image: "" }
-      ],
-      shippingData: { name: "Elite Member", address: "Sector 7, Lab District", city: "Neo Delhi" }
-    },
-    {
-      id: "NAV-102-PROC",
-      total: 5999,
-      paymentStatus: "verified",
-      orderStatus: "synchronizing",
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      items: [
-        { id: "3", name: "Cyber Armor X", price: 5999, quantity: 1, image: "" }
+        { id: "1", name: "Titan Shield Pro", price: 2499, quantity: 2, images: [] },
+        { id: "2", name: "Aero Carbon Case", price: 3499, quantity: 1, images: [] }
       ],
       shippingData: { name: "Elite Member", address: "Sector 7, Lab District", city: "Neo Delhi" }
     }
@@ -84,7 +73,8 @@ const OrderHistoryPage = () => {
       
       if (isSimulation) {
           setTimeout(() => {
-              setOrders(mockOrders);
+              const savedSims = JSON.parse(localStorage.getItem("navior_simulated_orders") || "[]");
+              setOrders([...savedSims, ...mockOrders]);
               setLoading(false);
           }, 1000);
           return;
@@ -104,7 +94,6 @@ const OrderHistoryPage = () => {
         setOrders(ordersData);
       } catch (error) {
         console.error("Error fetching orders:", error);
-        // Fallback to empty if DB fails
         setOrders([]);
       } finally {
         setLoading(false);
@@ -126,11 +115,15 @@ const OrderHistoryPage = () => {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    try {
+        return new Date(dateStr).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    } catch (e) {
+        return "N/A";
+    }
   };
 
   return (
@@ -149,16 +142,6 @@ const OrderHistoryPage = () => {
                   <h1 className="text-7xl md:text-9xl font-black tracking-tighter uppercase italic underline decoration-white/5 underline-offset-[20px]">
                      Asset.<br/>History.
                   </h1>
-               </div>
-               
-               <div className="flex items-center space-x-4">
-                  <div className="relative group">
-                     <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-hover:text-white transition-colors" size={16} />
-                     <input 
-                        placeholder="Search transmissions..."
-                        className="bg-white/5 border border-white/5 rounded-2xl py-5 pl-16 pr-8 focus:outline-none focus:border-white/20 transition-all text-[10px] uppercase font-black italic tracking-widest min-w-[300px]"
-                     />
-                  </div>
                </div>
             </div>
           </header>
@@ -190,7 +173,11 @@ const OrderHistoryPage = () => {
                              <div className="flex items-center space-x-10">
                                 <div className="w-24 h-24 bg-white/5 rounded-3xl flex items-center justify-center relative overflow-hidden">
                                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent" />
-                                   <Zap size={32} className="text-white/10 group-hover:text-white/40 transition-colors" />
+                                   {order.items[0]?.images?.[0] ? (
+                                      <img src={order.items[0].images[0]} alt="Gear" className="w-full h-full object-cover" />
+                                   ) : (
+                                       <Zap size={32} className="text-white/10 group-hover:text-white/40 transition-colors" />
+                                   )}
                                 </div>
                                 <div className="space-y-3">
                                    <div className="flex items-center space-x-4">
@@ -255,7 +242,7 @@ const OrderHistoryPage = () => {
                          <div className="flex items-center justify-between border-b border-white/5 pb-10">
                             <div>
                                <p className="text-[9px] uppercase tracking-[0.4em] font-black text-white/20 italic">Transmission Signature</p>
-                               <h3 className="text-3xl font-black tracking-tighter italic uppercase">{selectedOrder.id}</h3>
+                               <h3 className="text-2xl font-black tracking-tighter italic uppercase">{selectedOrder.id}</h3>
                             </div>
                          </div>
 
@@ -265,8 +252,12 @@ const OrderHistoryPage = () => {
                                {selectedOrder.items.map((item, i) => (
                                   <div key={i} className="flex justify-between items-center group">
                                      <div className="flex items-center space-x-6">
-                                        <div className="w-16 h-16 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-center group-hover:bg-white/10 transition-all">
-                                           <Package size={20} className="text-white/20 group-hover:text-white transition-colors" />
+                                        <div className="w-16 h-16 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-center group-hover:bg-white/10 transition-all overflow-hidden">
+                                           {item.images?.[0] ? (
+                                              <img src={item.images[0]} alt="Unit" className="w-full h-full object-cover" />
+                                           ) : (
+                                              <Package size={20} className="text-white/20 group-hover:text-white transition-colors" />
+                                           )}
                                         </div>
                                         <div className="space-y-1">
                                            <p className="text-sm font-black uppercase tracking-tight italic">{item.name}</p>
@@ -279,11 +270,35 @@ const OrderHistoryPage = () => {
                             </div>
                          </div>
 
-                         <div className="pt-10 border-t border-white/5 space-y-10">
+                         <div className="pt-10 border-t border-white/5 space-y-12">
+                            <div className="space-y-6">
+                               <h4 className="text-[9px] uppercase tracking-[0.4em] font-black text-white/20 italic">Tracking Timeline</h4>
+                               <div className="space-y-6 relative ml-1">
+                                  <div className="absolute left-[7px] top-2 bottom-2 w-px bg-white/10" />
+                                  {[
+                                     { label: "Deployment Initiated", date: formatDate(selectedOrder.createdAt), active: true },
+                                     { label: "Station Processing", date: "Verified", active: true },
+                                     { label: "Orbital Transit", date: "Scheduled", active: false },
+                                     { label: "Final Manifest", date: "Pending", active: false }
+                                  ].map((step, i) => (
+                                     <div key={i} className="flex items-start space-x-6 relative z-10">
+                                        <div className={`w-4 h-4 rounded-full border-2 ${step.active ? 'bg-blue-500 border-white shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'bg-black border-white/20'}`} />
+                                        <div className="space-y-1">
+                                           <p className={`text-[10px] uppercase font-black tracking-widest ${step.active ? 'text-white' : 'text-white/20'}`}>{step.label}</p>
+                                           <p className="text-[8px] uppercase tracking-widest text-white/20 italic">{step.date}</p>
+                                        </div>
+                                     </div>
+                                  ))}
+                               </div>
+                            </div>
+
                             <div className="space-y-4">
                                <h4 className="text-[9px] uppercase tracking-[0.4em] font-black text-white/20 italic">Logistics Station</h4>
-                               <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/5 space-y-2">
-                                  <p className="text-[10px] font-black uppercase italic tracking-widest">{selectedOrder.shippingData?.name || "Member UNK"}</p>
+                               <div className="p-8 rounded-[40px] bg-white/[0.02] border border-white/5 space-y-4">
+                                  <div className="flex items-center space-x-3 text-blue-500">
+                                     <Truck size={14} />
+                                     <p className="text-[10px] font-black uppercase italic tracking-widest">{selectedOrder.shippingData?.name || "Member UNK"}</p>
+                                  </div>
                                   <p className="text-[10px] font-medium uppercase italic text-white/40 tracking-tight leading-relaxed">
                                      {selectedOrder.shippingData?.address}, {selectedOrder.shippingData?.city}
                                   </p>

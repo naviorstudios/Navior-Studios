@@ -119,10 +119,10 @@ export const useFormValidation = (rules: ValidationRules) => {
 // Common validation patterns
 export const validationPatterns = {
   email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-  phone: /^[\+]?[1-9][\d]{0,15}$/,
-  password: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-  name: /^[a-zA-Z\s]+$/,
-  zipCode: /^\d{5,6}$/,
+  phone: /^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/, // More permissive phone
+  password: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/, // Simplified password
+  name: /^[a-zA-Z0-9\s\.\-\']+$/, // Support dots, dashes, numbers in names
+  zipCode: /^[0-9\s\-]{5,8}$/, // Support spaces/dashes in zip
 };
 
 // Common validation rules

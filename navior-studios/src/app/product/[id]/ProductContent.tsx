@@ -4,10 +4,12 @@ import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
+import Link from "next/link";
 import { Product, useCartStore } from "@/store/useCartStore";
-import { Shield, Zap, Package, ArrowLeft, Plus, Minus, Share2, Sparkles, Cpu, Globe } from "lucide-react";
+import { Shield, Zap, Package, ArrowLeft, ArrowRight, Plus, Minus, Share2, Sparkles, Cpu, Globe, Heart, User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/context/ToastContext";
+import { useWishlist } from "@/context/WishlistContext";
 
 interface ProductContentProps {
   initialProduct: Product;
@@ -20,6 +22,7 @@ const ProductContent: React.FC<ProductContentProps> = ({ initialProduct }) => {
   const [selectedImage, setSelectedImage] = useState(0);
   const { addToCart } = useCartStore();
   const { success: showSuccess } = useToast();
+  const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
 
   const handleAddToCart = () => {
     for (let i = 0; i < quantity; i++) {
@@ -203,6 +206,23 @@ const ProductContent: React.FC<ProductContentProps> = ({ initialProduct }) => {
                             <span>Initialize Deployment</span>
                             <ArrowRight size={16} className="group-hover:translate-x-2 transition-transform" />
                         </button>
+                        <button 
+                            onClick={() => {
+                                const prod = {
+                                    id: product.id,
+                                    name: product.name,
+                                    price: product.price,
+                                    images: product.images,
+                                    category: product.category,
+                                    compatibility: [],
+                                    description: product.description || ""
+                                };
+                                isInWishlist(product.id) ? removeFromWishlist(product.id) : addToWishlist(prod as any);
+                            }}
+                            className={`w-24 bg-${isInWishlist(product.id) ? 'red-500' : 'white/5'} border border-white/5 rounded-[30px] flex items-center justify-center transition-all hover:bg-white/10`}
+                        >
+                           <Heart size={20} fill={isInWishlist(product.id) ? "white" : "none"} className={isInWishlist(product.id) ? "text-white" : "text-white/40"} />
+                        </button>
                     </div>
 
                     <div className="grid grid-cols-2 gap-8 text-[9px] uppercase tracking-[0.4em] font-black text-white/20">
@@ -261,6 +281,95 @@ const ProductContent: React.FC<ProductContentProps> = ({ initialProduct }) => {
                     </div>
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] border-1 border-white/5 rounded-full animate-[spin_20s_linear_infinite]" />
                 </div>
+            </div>
+        </section>
+
+        {/* Peer Feedback Archive (Reviews) - Amazon Tier Integration */}
+        <section className="mt-60 space-y-20">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-12">
+               <div className="space-y-6">
+                  <span className="text-[10px] uppercase tracking-[0.5em] font-black text-white/20 italic">Peer Feedback Archive</span>
+                  <h2 className="text-6xl md:text-8xl font-black tracking-tighter uppercase italic leading-none">
+                     Field <br />
+                     <span className="text-white/10 italic">Reports.</span>
+                  </h2>
+               </div>
+               <div className="flex items-center space-x-8 pb-4">
+                  <div className="text-right">
+                     <p className="text-4xl font-black italic tracking-tighter">4.9</p>
+                     <p className="text-[9px] uppercase tracking-widest font-black text-white/20">Operational Rating</p>
+                  </div>
+                  <div className="flex space-x-1">
+                     {[1, 2, 3, 4, 5].map((s) => (
+                        <div key={s} className="w-2 h-2 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.5)]" />
+                     ))}
+                  </div>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+               {[
+                  { user: "ARCHIVIST_01", date: "2026.03.12", comment: "The structural integrity is beyond anything in the civilian sector. Elite deployment ready.", rating: 5 },
+                  { user: "PILOT_X", date: "2026.03.05", comment: "Zero thermal leakage. The haptic response on the buttons is synchronized perfectly.", rating: 5 },
+                  { user: "NOMAD_SURGE", date: "2026.02.28", comment: "Visual manifest is stunning. Protection level: Absolute.", rating: 4 }
+               ].map((review, i) => (
+                  <div key={i} className="p-10 rounded-[50px] bg-white/[0.02] border border-white/5 space-y-8 hover:bg-white/[0.04] transition-all group">
+                     <div className="flex justify-between items-start">
+                        <div className="flex space-x-1">
+                           {Array(review.rating).fill(0).map((_, j) => (
+                              <div key={j} className="w-1.5 h-1.5 rounded-full bg-white/40 group-hover:bg-white transition-colors" />
+                           ))}
+                        </div>
+                        <span className="text-[9px] font-black text-white/10">{review.date}</span>
+                     </div>
+                     <p className="text-lg font-medium italic text-white/60 leading-[1.4] line-clamp-3">
+                        &quot;{review.comment}&quot;
+                     </p>
+                     <div className="flex items-center space-x-4 border-t border-white/5 pt-6">
+                        <div className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                           <User size={12} className="text-white/20" />
+                        </div>
+                        <span className="text-[10px] font-black tracking-widest uppercase italic text-white/20">{review.user}</span>
+                     </div>
+                  </div>
+               ))}
+            </div>
+        </section>
+
+        {/* Synchronized Assets (Related Products) - Amazon Tier Exploration */}
+        <section className="mt-80 space-y-20 border-t border-white/5 pt-40 px-6">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-12">
+               <div className="space-y-6">
+                  <span className="text-[10px] uppercase tracking-[0.5em] font-black text-white/20 italic">Compatibility Protocol</span>
+                  <h2 className="text-6xl font-black tracking-tighter uppercase italic leading-none">
+                     Synchronized <br />
+                     <span className="text-white/10 italic">Assets.</span>
+                  </h2>
+                  <p className="text-xs text-white/40 font-medium uppercase tracking-[0.2em] italic max-w-sm">Elite members often synchronize these units for comprehensive deployment protection.</p>
+               </div>
+               <Link href="/collection" className="text-[10px] uppercase font-black tracking-[0.5em] text-white/20 hover:text-white transition-all pb-4 border-b border-white/5">Examine Collection</Link>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
+               {[
+                  { name: "Orbital Nexus Case", type: "ACCESSORY", price: "₹2,499", icon: Cpu },
+                  { name: "Titan Shield v2", type: "PROTECTION", price: "₹5,499", icon: Shield },
+                  { name: "Aero Command Strut", type: "CASE", price: "₹8,999", icon: Zap },
+                  { name: "Neural Link Band", type: "SYNC", price: "₹1,299", icon: Globe }
+               ].map((asset, i) => (
+                  <div key={i} className="group p-10 rounded-[50px] bg-white/[0.02] border border-white/5 space-y-10 hover:bg-white/[0.05] transition-all cursor-pointer">
+                     <div className="aspect-square bg-white/5 rounded-[40px] flex items-center justify-center relative overflow-hidden group-hover:bg-white/10 transition-colors">
+                        <asset.icon size={48} className="text-white/10 group-hover:text-white transition-all scale-100 group-hover:scale-110" />
+                        <div className="absolute top-6 left-6">
+                           <span className="text-[8px] font-black text-white/20 uppercase tracking-widest">{asset.type}</span>
+                        </div>
+                     </div>
+                     <div className="space-y-2 text-center">
+                        <h4 className="text-xl font-black italic tracking-tighter uppercase group-hover:italic transition-all">{asset.name}</h4>
+                        <p className="text-2xl font-black tracking-tighter italic text-white/60">{asset.price}</p>
+                     </div>
+                  </div>
+               ))}
             </div>
         </section>
       </div>

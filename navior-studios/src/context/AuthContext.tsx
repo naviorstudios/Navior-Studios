@@ -13,7 +13,7 @@ import {
   signInWithPhoneNumber
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import axios from "axios";
+import api from "@/lib/api";
 
 interface AuthContextType {
   user: User | any | null;
@@ -53,8 +53,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
-          // Sync with our backend
-          await axios.post("/api/user/sync", {
+          // Sync with our backend station (Port 5000)
+          await api.post("/api/user/sync", {
             uid: firebaseUser.uid,
             email: firebaseUser.email,
             displayName: firebaseUser.displayName,

@@ -2,21 +2,25 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { ShoppingBag, Search, User, Menu, X, Zap, Cpu, ShieldCheck } from "lucide-react";
+import { ShoppingBag, Search, User, Menu, X, Zap, Cpu, ShieldCheck, Heart } from "lucide-react";
 import { useCartStore } from "@/store/useCartStore";
 import { useUIStore } from "@/store/useUIStore";
 import { useAuth } from "@/context/AuthContext";
+import { useWishlist } from "@/context/WishlistContext";
 import { motion, AnimatePresence } from "framer-motion";
 import MagneticButton from "./MagneticButton";
 
 const Navbar = () => {
   const { cart } = useCartStore();
   const { user } = useAuth();
+  const { wishlistCount } = useWishlist();
   const { isCartOpen, setCartOpen, isMobileMenuOpen, setMobileMenuOpen, setSearchOpen } = useUIStore();
   const [scrolled, setScrolled] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
 
   useEffect(() => {
+    setHasMounted(true);
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
     };
@@ -37,11 +41,33 @@ const Navbar = () => {
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
 
   return (
-    <nav
-      className={`fixed top-0 left-0 w-full z-[100] transition-all duration-500 ${
-        scrolled ? "py-4" : "py-8"
-      }`}
-    >
+    <>
+      <div className="fixed top-0 left-0 w-full z-[110] bg-white text-black py-2 overflow-hidden flex items-center justify-center">
+         <motion.div 
+           animate={{ x: [1000, -1000] }}
+           transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+           className="flex items-center space-x-20 whitespace-nowrap text-[8px] font-black uppercase tracking-[0.4em] italic"
+         >
+            <span>FREE SHIPPING ON ALL DEPLOYMENTS ABOVE ₹999</span>
+            <span>//</span>
+            <span>USE CODE: NAVIOR10 FOR 10% OFF YOUR FIRST MISSION</span>
+            <span>//</span>
+            <span>LIMITED EDITION: SERIES 01.v2 NOW LIVE</span>
+            <span>//</span>
+            <span>SECURE STATION PROTOCOL: 100% ENCRYPTED CHECKOUT</span>
+            <span>//</span>
+            {/* Repeat for seamless loop */}
+            <span>FREE SHIPPING ON ALL DEPLOYMENTS ABOVE ₹999</span>
+            <span>//</span>
+            <span>USE CODE: NAVIOR10 FOR 10% OFF YOUR FIRST MISSION</span>
+         </motion.div>
+      </div>
+
+      <nav
+        className={`fixed left-0 w-full z-[100] transition-all duration-500 ${
+          scrolled ? "top-8 py-4" : "top-10 py-8"
+        }`}
+      >
       <div className={`container mx-auto px-6 flex items-center justify-between transition-all duration-500 max-w-[1400px] ${
           scrolled ? "bg-black/60 backdrop-blur-2xl py-4 px-10 rounded-[30px] border border-white/5 mx-6 md:mx-auto" : ""
       }`}>
@@ -56,13 +82,23 @@ const Navbar = () => {
 
         {/* Desktop Links */}
         <div className="hidden md:flex items-center space-x-12">
-          {["Collection", "Durability", "Build Kit"].map((item) => (
+          {[
+            { name: "Collection", badge: "NEW", badgeColor: "bg-blue-500" },
+            { name: "Durability" },
+            { name: "Build Kit" },
+            { name: "SALE", badge: "LIVE", badgeColor: "bg-rose-500", color: "text-rose-500" }
+          ].map((item) => (
             <Link
-              key={item}
-              href={`/${item.toLowerCase().replace(" ", "-")}`}
-              className="text-[10px] uppercase tracking-[0.4em] font-black italic text-white/40 hover:text-white transition-all relative group"
+              key={item.name}
+              href={`/${item.name.toLowerCase().replace(" ", "-")}`}
+              className={`text-[10px] uppercase tracking-[0.4em] font-black italic hover:text-white transition-all relative group flex items-center space-x-2 ${item.color || "text-white/40"}`}
             >
-              {item}
+              <span>{item.name}</span>
+              {item.badge && (
+                <span className={`text-[7px] px-2 py-0.5 rounded-full text-white font-black animate-pulse ${item.badgeColor}`}>
+                   {item.badge}
+                </span>
+              )}
               <span className="absolute -bottom-1 left-0 w-0 h-px bg-white transition-all group-hover:w-full" />
             </Link>
           ))}
@@ -76,14 +112,23 @@ const Navbar = () => {
           >
              <Search size={18} />
           </button>
+          <Link 
+            href="/wishlist"
+            className="p-3 hover:bg-white/5 rounded-2xl transition-all text-white/40 hover:text-white relative"
+          >
+             <Heart size={18} />
+             {wishlistCount > 0 && (
+               <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full animate-ping" />
+             )}
+          </Link>
           
           <div className="relative user-menu">
             <button 
-              onClick={() => user ? setUserMenuOpen(!userMenuOpen) : window.location.href = '/auth'}
-              className="p-3 bg-white/5 border border-white/5 rounded-2xl hover:bg-white/10 transition-all relative group"
+              onClick={() => (hasMounted && user) ? setUserMenuOpen(!userMenuOpen) : window.location.href = '/auth'}
+              className={`p-3 bg-white/5 border border-white/5 rounded-2xl hover:bg-white/10 transition-all relative group ${!hasMounted ? 'opacity-0' : 'opacity-100'}`}
             >
-              <User size={18} className={user ? "text-white" : "text-white/40"} />
-              {user && <div className="absolute top-0 right-0 w-2 h-2 bg-blue-500 rounded-full border-2 border-black" />}
+              <User size={18} className={(hasMounted && user) ? "text-white" : "text-white/40"} />
+              {(hasMounted && user) && <div className="absolute top-0 right-0 w-2 h-2 bg-blue-500 rounded-full border-2 border-black" />}
             </button>
 
             {/* User Dropdown Menu */}
@@ -160,22 +205,47 @@ const Navbar = () => {
                 <X size={24} />
               </button>
             </div>
-            <div className="space-y-12">
-              {["Collection", "Durability", "Build Kit"].map((item) => (
+            <div className="flex-1 flex flex-col justify-center items-center text-center space-y-12">
+              {[
+                { name: "Collection", badge: "NEW" },
+                { name: "Durability" },
+                { name: "Build Kit" },
+                { name: "SALE", badge: "Live", color: "text-rose-500" }
+              ].map((item: any) => (
                 <Link
-                  key={item}
-                  href={`/${item.toLowerCase().replace(" ", "-")}`}
-                  className="text-6xl font-black tracking-tighter uppercase italic block hover:text-white/40 transition-all"
+                  key={item.name}
+                  href={`/${item.name.toLowerCase().replace(" ", "-")}`}
+                  className={`text-6xl md:text-8xl font-black tracking-tighter uppercase italic block hover:text-white/40 transition-all hover:scale-110 active:scale-95 ${item.color || ""}`}
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  {item}
+                  {item.name}
                 </Link>
               ))}
+
+              <div className="pt-20 flex flex-col items-center space-y-6">
+                {(hasMounted && user) ? (
+                  <button 
+                    onClick={() => { window.location.href = '/dashboard'; setMobileMenuOpen(false); }}
+                    className="px-12 py-5 bg-white text-black font-black uppercase text-[10px] tracking-widest rounded-2xl italic flex items-center space-x-3"
+                  >
+                    <Cpu size={14} />
+                    <span>Enter Dashboard</span>
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => { window.location.href = '/auth'; setMobileMenuOpen(false); }}
+                    className="px-12 py-5 bg-white text-black font-black uppercase text-[10px] tracking-widest rounded-2xl italic"
+                  >
+                    Authenticate Session
+                  </button>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
     </nav>
+    </>
   );
 };
 

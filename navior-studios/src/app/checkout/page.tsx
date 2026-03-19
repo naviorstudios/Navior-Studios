@@ -7,7 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useFormValidation, commonValidationRules } from "@/hooks/useFormValidation";
 import { useRouter } from "next/navigation";
-import axios from "axios";
+import api from "@/lib/api";
 import { 
   CreditCard, 
   Truck, 
@@ -43,14 +43,24 @@ const CheckoutPage = () => {
   });
 
   const [shippingData, setShippingData] = useState({
-    name: user?.displayName || "",
-    email: user?.email || "",
+    name: "",
+    email: "",
     phone: "",
     address: "",
     city: "",
     state: "",
     zip: "",
   });
+
+  useEffect(() => {
+    if (user) {
+      setShippingData(prev => ({
+        ...prev,
+        name: prev.name || user.displayName || "",
+        email: prev.email || user.email || "",
+      }));
+    }
+  }, [user]);
 
   useEffect(() => {
     if (cart.length === 0 && paymentStep !== 3) {
@@ -74,9 +84,20 @@ const CheckoutPage = () => {
 
   const handleShippingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const isValid = shippingValidation.validateForm(shippingData);
+    
+    // Sanitize data before validation (strip spaces/dashes from phone/zip)
+    const sanitizedData = {
+      ...shippingData,
+      phone: shippingData.phone.replace(/[\s\-\(\)]/g, ''),
+      zip: shippingData.zip.replace(/[\s\-]/g, '')
+    };
+
+    const isValid = shippingValidation.validateForm(sanitizedData);
     if (!isValid) {
-      showError("Field Error", "Check your shipping coordinates.");
+      // Find the first specific error message
+      const firstErrorField = Object.keys(shippingValidation.errors)[0];
+      const errorMessage = shippingValidation.errors[firstErrorField] || "Check your logistical coordinates.";
+      showError("Field Error", errorMessage);
       return;
     }
     setPaymentStep(2);
@@ -88,6 +109,19 @@ const CheckoutPage = () => {
     // SIMULATION MODE BYPASS
     if (isSimulation) {
       setTimeout(() => {
+        // Log to simulated history
+        const simOrder = {
+          id: `SIM-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+          items: cart,
+          total: getTotal(),
+          shippingData,
+          paymentStatus: "verified",
+          orderStatus: "deployed",
+          createdAt: new Date().toISOString()
+        };
+        const prevSims = JSON.parse(localStorage.getItem("navior_simulated_orders") || "[]");
+        localStorage.setItem("navior_simulated_orders", JSON.stringify([simOrder, ...prevSims]));
+
         showSuccess("Simulation Verified", "Payment processed via Lab Simulation Protocol.");
         clearCart();
         setPaymentStep(3);
@@ -104,7 +138,7 @@ const CheckoutPage = () => {
     }
 
     try {
-      const { data: orderData } = await axios.post("/api/razorpay", {
+      const { data: orderData } = await api.post("/api/razorpay", {
         amount: getTotal(),
         currency: "INR",
         receipt: `receipt_${Date.now()}`,
@@ -119,7 +153,7 @@ const CheckoutPage = () => {
         order_id: orderData.id,
         handler: async (response: any) => {
           try {
-            const verifyRes = await axios.post("/api/razorpay/verify", {
+            const verifyRes = await api.post("/api/razorpay/verify", {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
@@ -378,7 +412,11 @@ const CheckoutPage = () => {
                         <div key={item.id} className="flex justify-between items-center group">
                             <div className="flex items-center space-x-6">
                                 <div className="w-20 h-24 bg-white/5 rounded-2xl border border-white/5 overflow-hidden flex items-center justify-center relative">
-                                    <img src={item.image} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity grayscale group-hover:grayscale-0" alt={item.name} />
+                                    {item.images?.[0] ? (
+                                        <img src={item.images[0]} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity grayscale group-hover:grayscale-0" alt={item.name} />
+                                    ) : (
+                                        <div className="absolute inset-0 bg-white/5" />
+                                    )}
                                     <span className="relative z-10 text-[9px] font-black text-white mix-blend-difference italic">x{item.quantity}</span>
                                 </div>
                                 <div className="space-y-1">
@@ -392,6 +430,19 @@ const CheckoutPage = () => {
                 </div>
 
                 <div className="space-y-6 pt-12 border-t border-white/5">
+                    <div className="flex flex-col space-y-4">
+                        <div className="flex items-center space-x-4">
+                           <input 
+                              type="text" 
+                              placeholder="PROMO_CODE" 
+                              className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-[10px] font-black uppercase tracking-widest focus:outline-none focus:border-white/20 transition-all placeholder:text-white/10"
+                           />
+                           <button className="px-8 py-4 bg-white/10 text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-white/20 transition-all italic underline decoration-white/20 underline-offset-4">
+                              Lock In
+                           </button>
+                        </div>
+                    </div>
+
                     <div className="flex justify-between items-end">
                        <div className="space-y-1">
                           <p className="text-[9px] uppercase tracking-[0.4em] font-black text-white/20 italic">Total Station Payload</p>

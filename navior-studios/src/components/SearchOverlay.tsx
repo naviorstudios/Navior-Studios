@@ -5,6 +5,7 @@ import { useUIStore } from "@/store/useUIStore";
 import { Search, X, ArrowRight, Smartphone, Zap, Package } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import axios from "axios";
 import Image from "next/image";
 import { Product } from "@/store/useCartStore";
 
@@ -17,17 +18,24 @@ const SearchOverlay = () => {
   // Using a custom hook or global state for search visibility
   // For now, let's assume we can trigger it from Navbar
   
-  // Simulated search results
+  // Real-time search from API
   useEffect(() => {
-    if (query.length > 1) {
-      const dummyResults: Product[] = [
-        { id: "1", name: "Titan Shield Pro", price: 2499, images: [], category: "Cases", compatibility: [], description: "" },
-        { id: "2", name: "Lunar MagSafe", price: 1899, images: [], category: "Power", compatibility: [], description: "" },
-      ].filter(p => p.name.toLowerCase().includes(query.toLowerCase()));
-      setResults(dummyResults);
-    } else {
-      setResults([]);
-    }
+    const delayDebounceFn = setTimeout(async () => {
+      if (query.trim().length > 1) {
+        try {
+          const { data } = await axios.get(`/api/products`, {
+            params: { search: query }
+          });
+          setResults(data);
+        } catch (error) {
+          console.error("Search Sync Error:", error);
+        }
+      } else {
+        setResults([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
   }, [query]);
 
   // Handle ESC to close
