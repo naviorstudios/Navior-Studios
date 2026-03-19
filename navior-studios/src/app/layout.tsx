@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/react";
 import { AuthProvider } from "@/context/AuthContext";
 import { ToastProvider } from "@/context/ToastContext";
 import { WishlistProvider } from "@/context/WishlistContext";
@@ -73,6 +74,7 @@ export default function RootLayout({
                 <CartSidebar />
                 <MarketActivity />
                 <AITerminal />
+                <Analytics />
               </SmoothScroll>
             </AuthProvider>
           </WishlistProvider>
