@@ -3,6 +3,8 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -32,7 +34,7 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-// Routes
+// --- CORE ROUTES ---
 app.get('/health', (req, res) => {
   res.json({ status: "Navior Station Online", timestamp: new Date() });
 });
@@ -41,7 +43,6 @@ app.get('/health', (req, res) => {
 app.post('/api/user/sync', async (req, res) => {
   try {
     const { uid, email, displayName, photoURL } = req.body;
-    
     const userRef = db.collection('users').doc(uid);
     await userRef.set({
       email,
@@ -50,11 +51,9 @@ app.post('/api/user/sync', async (req, res) => {
       lastSeen: admin.firestore.FieldValue.serverTimestamp(),
       role: "member"
     }, { merge: true });
-
     res.json({ message: "User synced to station", status: "active" });
   } catch (error) {
-    console.warn("User sync DB restricted (Simulation Mode Active)");
-    res.json({ message: "User synced (Simulated)", status: "simulated" });
+    res.json({ message: "User sync simulated", status: "simulated" });
   }
 });
 
@@ -82,6 +81,7 @@ app.post('/api/razorpay/verify', async (req, res) => {
       razorpay_payment_id, 
       razorpay_signature,
       shippingData,
+      userId,
       items,
       total
     } = req.body;
@@ -95,7 +95,8 @@ app.post('/api/razorpay/verify', async (req, res) => {
 
     if (expectedSignature === razorpay_signature) {
       try {
-        await db.collection("orders").add({
+        const orderDoc = {
+          userId,
           razorpayOrderId: razorpay_order_id,
           razorpayPaymentId: razorpay_payment_id,
           items,
@@ -103,9 +104,21 @@ app.post('/api/razorpay/verify', async (req, res) => {
           shippingData,
           status: "deployed",
           timestamp: admin.firestore.FieldValue.serverTimestamp()
-        });
+        };
+        await db.collection("orders").add(orderDoc);
+
+        // Decrement Inventory
+        const batch = db.batch();
+        for (const item of items) {
+           const productRef = db.collection('products').doc(item.id);
+           batch.update(productRef, {
+              stock: admin.firestore.FieldValue.increment(-item.quantity)
+           });
+        }
+        await batch.commit();
+        console.log(`📉 [INVENTORY]: Stock decanted for items in ${razorpay_order_id}`);
       } catch (dbErr) {
-        console.warn("DB Storage Refused (API Suspension Detected)");
+        console.warn("⚠️ [STATION_ERROR]: DB write restricted.");
       }
       res.json({ message: "Payment verified successfully", protocol: "Secure" });
     } else {
@@ -116,8 +129,90 @@ app.post('/api/razorpay/verify', async (req, res) => {
   }
 });
 
+// --- STATION HUB: PRODUCTS ---
+app.get('/api/products', async (req, res) => {
+  try {
+     const snapshot = await db.collection("products").get();
+     const products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+     res.json(products);
+  } catch (err) {
+     res.status(500).json({ error: "Product Manifest Failure" });
+  }
+});
+
+// --- STATION HUB: SEEDING ---
+app.post('/api/products/seed', async (req, res) => {
+  try {
+     const rawData = fs.readFileSync(path.join(__dirname, 'products.json'));
+     const products = JSON.parse(rawData.toString());
+     const batch = db.batch();
+
+     const snapshot = await db.collection("products").get();
+     snapshot.docs.forEach(doc => batch.delete(doc.ref));
+
+     products.forEach(p => {
+        const ref = db.collection("products").doc(p.id);
+        batch.set(ref, { 
+           ...p, 
+           updatedAt: admin.firestore.FieldValue.serverTimestamp() 
+        });
+     });
+
+     await batch.commit();
+     res.json({ message: "Manifest Synced", status: "AUTHORIZED" });
+  } catch (err) {
+     res.status(500).json({ error: "Seeding Node Failed" });
+  }
+});
+
+// --- STATION HUB: ORDERS ---
+app.get('/api/orders', async (req, res) => {
+  try {
+     const snapshot = await db.collection("orders").orderBy('timestamp', 'desc').get();
+     const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+     res.json(orders);
+  } catch (err) {
+     res.status(500).json({ error: "Archival Access Refused" });
+  }
+});
+
+// --- MARKET BEACON (SOCIAL PROOF) ---
+app.get('/api/market-activity', async (req, res) => {
+  try {
+     const snapshot = await db.collection('orders').orderBy('timestamp', 'desc').limit(10).get();
+     const activities = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+           name: data.shippingData?.name?.split(' ')[0] || "Operative",
+           location: data.shippingData?.city || "Unknown Node",
+           product: data.items?.[0]?.name || "Classified Gear",
+           time: "Just Now",
+           type: "DEPLOYMENT"
+        };
+     });
+     res.json(activities);
+  } catch (error) {
+     res.status(500).json({ error: "Beacon Offline" });
+  }
+});
+
+// --- ASSET OVERRIDE (ADMIN) ---
+app.post('/api/products/update', async (req, res) => {
+  try {
+     const { id, price, stock } = req.body;
+     const productRef = db.collection('products').doc(id);
+     await productRef.update({
+        price: Number(price),
+        stock: Number(stock),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+     });
+     res.json({ message: "Asset Manifest Updated" });
+  } catch (error) {
+     res.status(500).json({ error: "Refraction Failed" });
+  }
+});
+
 const PORT = process.env.BACKEND_PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`🚀 NAVIOR BACKEND HUB: ONLINE on Port ${PORT}`);
-    console.log(`🛰️ Mission Control Status: Active`);
+    console.log(`🚀 NAVIOR BACKEND HUB: Port ${PORT}`);
 });

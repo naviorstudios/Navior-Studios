@@ -52,18 +52,51 @@ const CartSidebar = () => {
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
             className="fixed right-0 top-0 h-full w-full max-w-md glass border-l border-white/10 z-70 flex flex-col shadow-2xl"
           >
-            <div className="p-8 border-b border-white/10 flex items-center justify-between">
+            <div className="p-8 border-b border-white/10 flex items-center justify-between relative overflow-hidden">
+               {/* Reservation Timer - FOMO DNA */}
+               <div className="absolute top-0 left-0 w-full h-1 bg-white/[0.02]">
+                  <motion.div 
+                    initial={{ width: "100%" }}
+                    animate={{ width: "0%" }}
+                    transition={{ duration: 600, ease: "linear" }}
+                    className="h-full bg-blue-500"
+                  />
+               </div>
+               
               <div className="flex items-center space-x-3">
                 <ShoppingBag size={24} strokeWidth={1.5} />
-                <h2 className="text-2xl font-bold tracking-tighter">Your Bag</h2>
+                <h2 className="text-2xl font-bold tracking-tighter uppercase italic">Your Bag</h2>
+              </div>
+              <div className="flex items-center space-x-2 bg-white/5 px-3 py-1 rounded-full border border-white/5">
+                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                 <span className="text-[9px] font-black uppercase tracking-widest text-white/40 italic">10:00 MINS LEFT</span>
               </div>
               <button
                 onClick={() => setCartOpen(false)}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                className="p-2 hover:bg-white/10 rounded-full transition-colors ml-4"
               >
                 <X size={24} strokeWidth={1.5} />
               </button>
             </div>
+
+            {/* Free Deployment Progress Hub */}
+            {cart.length > 0 && (
+              <div className="px-8 pt-8 pb-4 space-y-4">
+                 <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-[0.2em] italic">
+                    <span className={getTotal() >= 999 ? "text-emerald-400" : "text-white/30"}>
+                       {getTotal() >= 999 ? "MISSION SUCCESS: FREE DEPLOYMENT UNLOCKED" : `ADD ₹${(999 - getTotal()).toLocaleString()} MORE FOR FREE DEPLOYMENT`}
+                    </span>
+                    <span className="text-white/10">GOAL: ₹999</span>
+                 </div>
+                 <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min((getTotal() / 999) * 100, 100)}%` }}
+                      className={`h-full transition-colors duration-500 ${getTotal() >= 999 ? "bg-emerald-500" : "bg-blue-500"}`}
+                    />
+                 </div>
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto p-8 space-y-12">
               {cart.length === 0 ? (

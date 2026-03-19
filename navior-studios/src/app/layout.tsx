@@ -9,6 +9,12 @@ import CustomCursor from "@/components/CustomCursor";
 import LoadingScreen from "@/components/LoadingScreen";
 import SearchOverlay from "@/components/SearchOverlay";
 import SmoothScroll from "@/components/SmoothScroll";
+import MarketActivity from "@/components/MarketActivity";
+import AITerminal from "@/components/AITerminal";
+
+// Rest of layout...
+
+// Rest of layout...
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -65,6 +71,8 @@ export default function RootLayout({
                 <SearchOverlay />
                 {children}
                 <CartSidebar />
+                <MarketActivity />
+                <AITerminal />
               </SmoothScroll>
             </AuthProvider>
           </WishlistProvider>

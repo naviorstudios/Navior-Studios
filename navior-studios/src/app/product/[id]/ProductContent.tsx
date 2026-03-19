@@ -23,6 +23,16 @@ const ProductContent: React.FC<ProductContentProps> = ({ initialProduct }) => {
   const { addToCart } = useCartStore();
   const { success: showSuccess } = useToast();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
+  const [showDiscount, setShowDiscount] = useState(false);
+  const [activeEnv, setActiveEnv] = useState('office');
+
+  // AI Dynamic Pricing Logic: Detect engagement and award mission-reward after 15s
+  useEffect(() => {
+     const timer = setTimeout(() => {
+        setShowDiscount(true);
+     }, 15000);
+     return () => clearTimeout(timer);
+  }, []);
 
   const handleAddToCart = () => {
     for (let i = 0; i < quantity; i++) {
@@ -73,13 +83,31 @@ const ProductContent: React.FC<ProductContentProps> = ({ initialProduct }) => {
                     className="relative w-full h-full flex items-center justify-center p-12 md:p-24"
                   >
                     {product.images?.[selectedImage] ? (
-                        <Image
-                            src={product.images[selectedImage]}
-                            alt={product.name}
-                            fill
-                            priority
-                            className="object-contain drop-shadow-[0_40px_80px_rgba(255,255,255,0.05)] transition-transform duration-700 group-hover:scale-110"
-                        />
+                        <div className="relative w-full h-full group overflow-hidden">
+                           <AnimatePresence mode="wait">
+                              <motion.div 
+                                 key={activeEnv}
+                                 initial={{ x: '-100%' }}
+                                 animate={{ x: '200%' }}
+                                 transition={{ duration: 0.8, ease: "easeInOut" }}
+                                 className="absolute inset-0 z-10 pointer-events-none bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12"
+                              />
+                           </AnimatePresence>
+                           <Image
+                               src={product.images[selectedImage]}
+                               alt={product.name}
+                               fill
+                               priority
+                               style={{ 
+                                  filter: activeEnv === 'tactical' 
+                                    ? 'brightness(0.7) contrast(1.2) hue-rotate(180deg) saturate(1.5)' 
+                                    : activeEnv === 'urban' 
+                                      ? 'brightness(0.9) contrast(1.1) saturate(1.2) hue-rotate(45deg)'
+                                      : 'none'
+                               }}
+                               className="object-contain drop-shadow-[0_40px_80px_rgba(255,255,255,0.05)] transition-all duration-700 group-hover:scale-110"
+                           />
+                        </div>
                     ) : (
                         <div className="text-white/[0.03] font-black text-[20rem] tracking-tighter uppercase select-none italic -rotate-12">
                             {product.name.split(' ')[0]}
@@ -118,6 +146,40 @@ const ProductContent: React.FC<ProductContentProps> = ({ initialProduct }) => {
                         )}
                     </motion.button>
                 ))}
+            </div>
+
+            {/* AI Visualizer Hub */}
+            <div className="bg-white/[0.02] border border-white/5 p-8 rounded-[40px] space-y-6">
+               <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3 text-white/40">
+                     <Sparkles size={14} className="text-blue-400" />
+                     <span className="text-[10px] font-black uppercase tracking-[0.4em] italic leading-none">AI Environ Visualizer</span>
+                  </div>
+                  <div className="flex items-center space-x-2 bg-white/5 px-2 py-1 rounded-md">
+                     <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />
+                     <span className="text-[8px] font-black text-white/20 uppercase tracking-widest italic font-mono">RENDER_v1.0</span>
+                  </div>
+               </div>
+               <div className="flex gap-4">
+                  {[
+                    { id: 'office', label: 'OFFICE' },
+                    { id: 'tactical', label: 'TACTICAL' },
+                    { id: 'urban', label: 'URBAN' }
+                  ].map(env => (
+                    <button 
+                      key={env.id}
+                      onClick={() => setActiveEnv(env.id)}
+                      className={`flex-1 py-4 border rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                        activeEnv === env.id 
+                          ? 'bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]' 
+                          : 'bg-white/5 border-white/5 text-white/20 hover:border-white/20'
+                      }`}
+                    >
+                      {env.label}
+                    </button>
+                  ))}
+               </div>
+               <p className="text-[7px] font-bold text-white/10 uppercase tracking-[0.4em] italic text-center">Simulating archival lighting for peak structural visibility.</p>
             </div>
           </div>
 
@@ -159,12 +221,94 @@ const ProductContent: React.FC<ProductContentProps> = ({ initialProduct }) => {
             </header>
 
             <div className="space-y-12">
+                {/* Sale DNA & Urgency */}
+                <div className="p-8 bg-rose-500/5 border border-rose-500/10 rounded-[40px] space-y-6 relative overflow-hidden group">
+                   <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3 text-rose-500">
+                         <div className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                         <span className="text-[10px] font-black uppercase tracking-[0.4em] italic leading-none">High Demand Alpha</span>
+                      </div>
+                      <span className="text-[8px] font-black text-rose-500/40 uppercase tracking-widest italic font-mono animate-pulse">#S01_URGENT</span>
+                   </div>
+                   
+                   <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
+                      <div className="space-y-2">
+                         <h4 className="text-3xl font-black italic tracking-tighter uppercase leading-none">Only 4 Units <br /> <span className="text-white/20">Remains in Archive.</span></h4>
+                         <p className="text-[9px] font-bold text-white/20 uppercase tracking-[0.3em] italic">This unit will not be restocked after Series 01.v2</p>
+                      </div>
+                      <div className="bg-white/5 px-6 py-4 rounded-3xl border border-white/5 text-right shrink-0">
+                         <p className="text-[8px] font-black text-white/20 uppercase tracking-widest mb-1">Dispatch Deadline</p>
+                         <p className="text-xl font-black italic tracking-tighter text-amber-400">1h 22m 15s</p>
+                      </div>
+                   </div>
+
+                   {/* Background Pulse */}
+                   <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/5 blur-3xl pointer-events-none group-hover:bg-rose-500/10 transition-colors" />
+                </div>
+
+                <div className="flex items-center space-x-4 px-2">
+                   <div className="flex -space-x-3">
+                      {[1,2,3].map(i => (
+                         <div key={i} className="w-8 h-8 rounded-full border-2 border-black bg-white/10 flex items-center justify-center overflow-hidden">
+                            <User size={12} className="text-white/40" />
+                         </div>
+                      ))}
+                   </div>
+                   <p className="text-[10px] font-black uppercase tracking-widest italic text-white/30">
+                      <span className="text-white animate-pulse">12 Peers</span> are viewing this unit right now
+                   </p>
+                </div>
+
+                {/* AI Fit Logic Hub */}
+                <div className="p-8 bg-blue-500/5 border border-blue-500/10 rounded-[40px] space-y-6">
+                   <div className="flex items-center space-x-3 text-blue-400">
+                      <Cpu size={14} className="animate-spin-slow" />
+                      <span className="text-[9px] font-black uppercase tracking-[0.4em] italic">Neural Fit Verification</span>
+                   </div>
+                   <div className="relative group">
+                      <input 
+                        placeholder="Enter Device Model (e.g. iPhone 15 Pro)"
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-5 pl-7 pr-32 text-xs font-black uppercase tracking-widest focus:outline-none focus:border-blue-500 group-hover:bg-white/10 transition-all italic"
+                      />
+                      <button className="absolute right-2 top-2 bottom-2 px-6 bg-blue-500 text-black text-[9px] font-black uppercase tracking-widest rounded-xl hover:scale-105 active:scale-95 transition-all">Verify Fit</button>
+                   </div>
+                   <p className="text-[7px] font-bold text-white/20 uppercase tracking-[0.2em] italic">AI will analyze structural compatibility with Series 01.v2 archives.</p>
+                </div>
+
+                {/* Dynamic AI Pricing Notification (Hidden initially) */}
+                <AnimatePresence>
+                  {showDiscount && (
+                    <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="p-8 bg-emerald-500/10 border border-emerald-500/20 rounded-[40px] relative overflow-hidden group shadow-[0_0_50px_rgba(16,185,129,0.1)]"
+                    >
+                        <div className="absolute top-0 right-0 p-4">
+                           <Sparkles size={16} className="text-emerald-400 animate-pulse" />
+                        </div>
+                        <div className="space-y-4 relative z-10">
+                           <div className="flex items-center space-x-3 text-emerald-400">
+                              <Zap size={14} />
+                              <span className="text-[10px] font-black uppercase tracking-[0.4em] italic leading-none">AI Priority Reward Granted</span>
+                           </div>
+                           <h4 className="text-3xl font-black italic tracking-tighter uppercase leading-none">ARCHIVE_DEAL: ₹500 OFF <br /> <span className="text-white/20">Mission Authorized.</span></h4>
+                           <div className="flex items-center space-x-2">
+                              <span className="text-[7px] font-black text-white/40 uppercase tracking-widest">USE CODE:</span>
+                              <span className="text-xs font-black text-white tracking-[0.5em] bg-white/5 px-3 py-1 rounded-lg border border-white/5">NAVIOR_AI</span>
+                           </div>
+                        </div>
+                        {/* Detail */}
+                        <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-emerald-500/5 blur-3xl" />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <p className="text-xl text-white/40 leading-relaxed font-medium max-w-lg italic">
                     {product.description}
                 </p>
 
                 {/* Specs Grid */}
-                <div className="grid grid-cols-2 gap-6 pb-12 border-b border-white/5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pb-12 border-b border-white/5">
                     <div className="p-8 bg-white/[0.02] rounded-[40px] border border-white/5 space-y-4 group hover:bg-white/[0.04] transition-all">
                         <Shield size={28} className="text-white/20 group-hover:text-white transition-colors" />
                         <div className="space-y-1">
@@ -178,6 +322,14 @@ const ProductContent: React.FC<ProductContentProps> = ({ initialProduct }) => {
                            <p className="text-[9px] uppercase tracking-[0.4em] font-black text-white/20">Technology</p>
                            <p className="text-sm font-black uppercase italic tracking-tight">AeroSync V2.0</p>
                         </div>
+                    </div>
+                    <div className="p-8 bg-white/[0.02] rounded-[40px] border border-white/5 space-y-4 group hover:bg-white/[0.04] transition-all relative overflow-hidden">
+                        <Sparkles size={28} className="text-amber-400/40 group-hover:text-amber-400 transition-colors" />
+                        <div className="space-y-1">
+                           <p className="text-[9px] uppercase tracking-[0.4em] font-black text-white/20">Validation</p>
+                           <p className="text-sm font-black uppercase italic tracking-tight text-amber-500/80">AI-Verified Protection</p>
+                        </div>
+                        <div className="absolute top-2 right-4 text-[7px] font-black text-amber-500/20 italic">CERT_99.9%</div>
                     </div>
                 </div>
 

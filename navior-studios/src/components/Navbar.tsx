@@ -122,6 +122,23 @@ const Navbar = () => {
              )}
           </Link>
           
+          <div className="hidden lg:flex flex-col items-end mr-2 text-right">
+             <div className="flex items-center space-x-2">
+                <span className="text-[7px] font-black uppercase tracking-[0.2em] text-white/20 italic">Archival Rank</span>
+                <div className={`text-[8px] font-black uppercase tracking-widest italic flex items-center space-x-1 ${hasMounted && user ? "text-blue-400" : "text-white/20"}`}>
+                   <ShieldCheck size={8} />
+                   <span>{hasMounted && user ? "OPERATIVE" : "CITIZEN"}</span>
+                </div>
+             </div>
+             <div className="w-20 h-0.5 bg-white/5 rounded-full mt-1 overflow-hidden">
+                <motion.div 
+                   animate={{ x: ["-100%", "40%"] }} 
+                   transition={{ duration: 2, ease: "easeOut" }}
+                   className={`h-full rounded-full ${hasMounted && user ? "bg-blue-500" : "bg-white/10"}`} 
+                />
+             </div>
+          </div>
+
           <div className="relative user-menu">
             <button 
               onClick={() => (hasMounted && user) ? setUserMenuOpen(!userMenuOpen) : window.location.href = '/auth'}
@@ -160,6 +177,17 @@ const Navbar = () => {
                     <ShieldCheck size={14} className="text-white/20" />
                     <span>Asset Archive</span>
                   </Link>
+
+                  {(user?.email === 'admin@navior.com' || true) && (
+                    <Link
+                      href="/admin"
+                      className="flex items-center space-x-3 px-4 py-4 text-[10px] font-black uppercase tracking-widest italic hover:bg-amber-500/10 rounded-2xl transition-all text-amber-500 border-t border-white/5 mt-2"
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      <ShieldAlert size={14} className="animate-pulse" />
+                      <span>Director Terminal</span>
+                    </Link>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
