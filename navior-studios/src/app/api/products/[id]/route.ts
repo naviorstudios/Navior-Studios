@@ -3,14 +3,14 @@ import { adminDb, adminAuth } from "@/lib/firebase-admin";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     if (!adminDb) {
       return NextResponse.json({ error: "Database not initialized" }, { status: 500 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const doc = await adminDb.doc(`products/${id}`).get();
 
     if (!doc.exists) {
@@ -26,14 +26,14 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     if (!adminDb || !adminAuth) {
       return NextResponse.json({ error: "Firebase not initialized" }, { status: 500 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const authHeader = req.headers.get("authorization");
     
     if (!authHeader?.startsWith("Bearer ")) {
@@ -62,14 +62,14 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     if (!adminDb || !adminAuth) {
       return NextResponse.json({ error: "Firebase not initialized" }, { status: 500 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const authHeader = req.headers.get("authorization");
     
     if (!authHeader?.startsWith("Bearer ")) {
